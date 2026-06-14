@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Vehikill.io — A fast-paced 3D multiplayer vehicular combat arena. Ram, wreck, and dominate in this action-packed .io game.">
+  <title>Vehikill.io — Vehicular Combat Arena</title>
+
+  <!-- Google Font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== THREE.JS CANVAS MOUNT ========== -->
+  <div id="game-container"></div>
+
+  <!-- ========== DAMAGE FLASH OVERLAY ========== -->
+  <div id="damage-flash"></div>
+
+  <!-- ========== GAME HUD (hidden until game starts) ========== -->
+  <div id="hud" style="display:none;">
+
+    <!-- Health Bar — bottom center -->
+    <div id="health-panel">
+      <div id="health-label">CAR</div>
+      <div id="health-bar-bg">
+        <div id="health-fill"></div>
+      </div>
+      <div id="health-text">100</div>
+    </div>
+
+    <!-- Speedometer — bottom right -->
+    <div id="speedometer">
+      <span id="speed-value">0</span>
+      <span id="speed-unit">km/h</span>
+    </div>
+
+    <!-- Leaderboard — top right -->
+    <div id="leaderboard-panel">
+      <div id="leaderboard-title">🏆 LEADERBOARD</div>
+      <div id="leaderboard-list"></div>
+    </div>
+
+    <!-- Kill Feed — top center -->
+    <div id="kill-feed"></div>
+
+    <!-- Controls hint — bottom left -->
+    <div id="controls-hint">
+      <span>WASD</span> / <span>↑↓←→</span> to drive
+    </div>
+  </div>
+
+  <!-- ========== DEATH OVERLAY ========== -->
+  <div id="death-overlay">
+    <div id="death-title">WASTED</div>
+    <div id="death-killer"></div>
+    <div id="death-countdown"></div>
+  </div>
+
+  <!-- ========== MAIN MENU ========== -->
+  <div id="menu-screen">
+    <div id="menu-content">
+      <!-- Title -->
+      <h1 id="menu-title">VEHIKILL<span class="title-dot">.IO</span></h1>
+      <p id="menu-subtitle">V E H I C U L A R &nbsp; C O M B A T &nbsp; A R E N A</p>
+
+      <!-- Name Input -->
+      <div id="name-section">
+        <label for="player-name">ENTER YOUR NAME</label>
+        <input type="text" id="player-name" maxlength="12" placeholder="Player" autocomplete="off" spellcheck="false">
+      </div>
+
+      <!-- Vehicle Selection -->
+      <div id="vehicle-section">
+        <label>SELECT YOUR VEHICLE</label>
+        <div id="vehicle-grid">
+
+          <div class="vehicle-card selected" data-type="car">
+            <div class="vc-icon">🏎️</div>
+            <div class="vc-name">CAR</div>
+            <div class="vc-stats">
+              <div class="stat-row"><span class="stat-label">SPD</span><div class="stat-bar"><div class="stat-fill" style="width:100%"></div></div></div>
+              <div class="stat-row"><span class="stat-label">HP</span><div class="stat-bar"><div class="stat-fill stat-hp" style="width:29%"></div></div></div>
+            </div>
+          </div>
+
+          <div class="vehicle-card" data-type="pickup">
+            <div class="vc-icon">🛻</div>
+            <div class="vc-name">PICKUP</div>
+            <div class="vc-stats">
+              <div class="stat-row"><span class="stat-label">SPD</span><div class="stat-bar"><div class="stat-fill" style="width:80%"></div></div></div>
+              <div class="stat-row"><span class="stat-label">HP</span><div class="stat-bar"><div class="stat-fill stat-hp" style="width:43%"></div></div></div>
+            </div>
+          </div>
+
+          <div class="vehicle-card" data-type="van">
+            <div class="vc-icon">🚐</div>
+            <div class="vc-name">VAN</div>
+            <div class="vc-stats">
+              <div class="stat-row"><span class="stat-label">SPD</span><div class="stat-bar"><div class="stat-fill" style="width:63%"></div></div></div>
+              <div class="stat-row"><span class="stat-label">HP</span><div class="stat-bar"><div class="stat-fill stat-hp" style="width:64%"></div></div></div>
+            </div>
+          </div>
+
+          <div class="vehicle-card" data-type="tank">
+            <div class="vc-icon">🪖</div>
+            <div class="vc-name">TANK</div>
+            <div class="vc-stats">
+              <div class="stat-row"><span class="stat-label">SPD</span><div class="stat-bar"><div class="stat-fill" style="width:45%"></div></div></div>
+              <div class="stat-row"><span class="stat-label">HP</span><div class="stat-bar"><div class="stat-fill stat-hp" style="width:100%"></div></div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Play Button -->
+      <button id="play-btn">▶ PLAY</button>
+    </div>
+  </div>
+
+  <!-- ========== SCRIPTS ========== -->
+
+  <!-- Socket.io client (non-module, creates global `io`) -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Three.js import map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <!-- Game entry point (ES module) -->
+  <script type="module" src="src/main.js"></script>
+
+</body>
+</html>

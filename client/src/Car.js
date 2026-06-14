@@ -1,0 +1,567 @@
+// ============================================================================
+// Car.js — 3D vehicle model + client-side physics
+// ============================================================================
+import * as THREE from 'three';
+
+// Vehicle configs — physics values tuned for 3D space (arena 300×300)
+export const VEHICLE_CONFIGS = {
+    car: {
+        maxSpeed: 55, accel: 50, brakeDecel: 65, drag: 0.97,
+        turnSpeed: 2.8, maxHealth: 80,
+        bodyW: 1.8, bodyH: 0.6, bodyL: 4,
+        cabinW: 1.5, cabinH: 0.45, cabinL: 1.8, cabinOffZ: -0.3
+    },
+    pickup: {
+        maxSpeed: 45, accel: 38, brakeDecel: 55, drag: 0.965,
+        turnSpeed: 2.4, maxHealth: 120,
+        bodyW: 2.0, bodyH: 0.7, bodyL: 4.5,
+        cabinW: 1.7, cabinH: 0.5, cabinL: 1.8, cabinOffZ: 0.2
+    },
+    van: {
+        maxSpeed: 35, accel: 28, brakeDecel: 42, drag: 0.96,
+        turnSpeed: 1.9, maxHealth: 180,
+        bodyW: 2.3, bodyH: 1.0, bodyL: 5.0,
+        cabinW: 2.1, cabinH: 0.65, cabinL: 2.2, cabinOffZ: -0.2
+    },
+    tank: {
+        maxSpeed: 25, accel: 22, brakeDecel: 30, drag: 0.955,
+        turnSpeed: 1.4, maxHealth: 280,
+        bodyW: 2.8, bodyH: 0.85, bodyL: 5.5,
+        cabinW: 2.0, cabinH: 0.5, cabinL: 2.5, cabinOffZ: -0.5
+    }
+};
+
+// Color palette matching server
+const COLOR_PALETTE = [
+    0xe74c3c, 0x3498db, 0x2ecc71, 0xf39c12, 0x9b59b6,
+    0xe67e22, 0x1abc9c, 0xfd79a8, 0x00cec9, 0x6c5ce7
+];
+
+const COLOR_HEX_MAP = {
+    '#e74c3c': 0, '#3498db': 1, '#2ecc71': 2, '#f39c12': 3, '#9b59b6': 4,
+    '#e67e22': 5, '#1abc9c': 6, '#fd79a8': 7, '#00cec9': 8, '#6c5ce7': 9
+};
+
+export function colorHexToIndex(hex) {
+    return COLOR_HEX_MAP[hex] !== undefined ? COLOR_HEX_MAP[hex] : 0;
+}
+
+export function getColor(index) {
+    return COLOR_PALETTE[index % COLOR_PALETTE.length];
+}
+
+
+export class Car {
+    /**
+     * @param {THREE.Scene} scene
+     * @param {number} x - 3D x position
+     * @param {number} z - 3D z position
+     * @param {string} type - 'car'|'pickup'|'van'|'tank'
+     * @param {number} colorIndex - index into COLOR_PALETTE
+     * @param {boolean} isLocal - true for the player's own car
+     */
+    constructor(scene, x, z, type, colorIndex, isLocal) {
+        this.scene = scene;
+        this.type = type;
+        this.isLocal = isLocal;
+        this.id = null;
+
+        const cfg = VEHICLE_CONFIGS[type] || VEHICLE_CONFIGS.car;
+        this.cfg = cfg;
+
+        // Physics state
+        this.speed = 0;
+        this.angle = 0;  // rotation.y in radians
+        this.health = cfg.maxHealth;
+        this.maxHealth = cfg.maxHealth;
+
+        // Interpolation targets (remote players)
+        this.targetX = x;
+        this.targetZ = z;
+        this.targetAngle = 0;
+
+        // Build 3D model
+        const color = getColor(colorIndex);
+        this.group = this._buildModel(type, color, cfg);
+        this.group.position.set(x, 0, z);
+        scene.add(this.group);
+
+        // Camera goal (child of car, used for smooth camera follow)
+        if (isLocal) {
+            this.cameraGoal = new THREE.Object3D();
+            this.cameraGoal.position.set(0, 6, -12); // behind and above
+            this.group.add(this.cameraGoal);
+
+            this.cameraLookTarget = new THREE.Object3D();
+            this.cameraLookTarget.position.set(0, 1.5, 8); // ahead of car
+            this.group.add(this.cameraLookTarget);
+        }
+
+        // Name tag sprite
+        this.nameSprite = null;
+    }
+
+    // ========================================================================
+    // 3D Model Builder
+    // ========================================================================
+
+    _buildModel(type, color, cfg) {
+        const group = new THREE.Group();
+
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color, metalness: 0.55, roughness: 0.35
+        });
+        const darkMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(color).multiplyScalar(0.6),
+            metalness: 0.4, roughness: 0.5
+        });
+        const glassMat = new THREE.MeshStandardMaterial({
+            color: 0x88ccff, transparent: true, opacity: 0.45,
+            metalness: 0.9, roughness: 0.1
+        });
+        const wheelMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.95
+        });
+        const headlightMat = new THREE.MeshStandardMaterial({
+            color: 0xffffcc, emissive: 0xffffaa, emissiveIntensity: 0.9
+        });
+        const taillightMat = new THREE.MeshStandardMaterial({
+            color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.6
+        });
+
+        // ---- Body ----
+        const bodyGeo = new THREE.BoxGeometry(cfg.bodyW, cfg.bodyH, cfg.bodyL);
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.5 + cfg.bodyH / 2;
+        body.castShadow = true;
+        group.add(body);
+
+        // ---- Cabin / Roof ----
+        if (type === 'tank') {
+            // Turret instead of cabin
+            const turretGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.5, 8);
+            const turret = new THREE.Mesh(turretGeo, darkMat);
+            turret.position.set(0, 0.5 + cfg.bodyH + 0.25, -0.3);
+            turret.castShadow = true;
+            group.add(turret);
+
+            // Barrel
+            const barrelGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 8);
+            const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshStandardMaterial({
+                color: 0x555555, roughness: 0.7, metalness: 0.5
+            }));
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 0.5 + cfg.bodyH + 0.25, 1.6);
+            barrel.castShadow = true;
+            group.add(barrel);
+        } else {
+            const cabinGeo = new THREE.BoxGeometry(cfg.cabinW, cfg.cabinH, cfg.cabinL);
+            const cabin = new THREE.Mesh(cabinGeo, bodyMat);
+            cabin.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ);
+            cabin.castShadow = true;
+            group.add(cabin);
+
+            // Windshield (front, angled)
+            const wsGeo = new THREE.BoxGeometry(cfg.cabinW - 0.15, cfg.cabinH - 0.05, 0.08);
+            const ws = new THREE.Mesh(wsGeo, glassMat);
+            ws.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + cfg.cabinL / 2);
+            ws.rotation.x = Math.PI * 0.12;
+            group.add(ws);
+
+            // Rear window
+            const rwGeo = new THREE.BoxGeometry(cfg.cabinW - 0.2, cfg.cabinH - 0.1, 0.06);
+            const rw = new THREE.Mesh(rwGeo, glassMat);
+            rw.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ - cfg.cabinL / 2);
+            rw.rotation.x = -Math.PI * 0.08;
+            group.add(rw);
+        }
+
+        // ---- Wheels ----
+        const wheelR = type === 'tank' ? 0.4 : 0.32;
+        const wheelW = type === 'tank' ? 0.35 : 0.2;
+        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 12);
+        const wheelOffX = cfg.bodyW / 2 + wheelW / 2 - 0.05;
+        const wheelZ1 = cfg.bodyL * 0.32;
+        const wheelZ2 = -cfg.bodyL * 0.32;
+
+        const wheelPositions = [
+            [-wheelOffX, wheelR, wheelZ1],
+            [wheelOffX, wheelR, wheelZ1],
+            [-wheelOffX, wheelR, wheelZ2],
+            [wheelOffX, wheelR, wheelZ2]
+        ];
+
+        this.wheels = [];
+        wheelPositions.forEach(([wx, wy, wz]) => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.position.set(wx, wy, wz);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.castShadow = true;
+            group.add(wheel);
+            this.wheels.push(wheel);
+        });
+
+        // ---- Headlights ----
+        const hlGeo = new THREE.SphereGeometry(0.1, 6, 6);
+        const frontZ = cfg.bodyL / 2;
+        [-cfg.bodyW * 0.35, cfg.bodyW * 0.35].forEach(hx => {
+            const hl = new THREE.Mesh(hlGeo, headlightMat);
+            hl.position.set(hx, 0.5 + cfg.bodyH * 0.5, frontZ);
+            group.add(hl);
+        });
+
+        // ---- Taillights ----
+        const tlGeo = new THREE.BoxGeometry(0.25, 0.12, 0.06);
+        const rearZ = -cfg.bodyL / 2;
+        [-cfg.bodyW * 0.35, cfg.bodyW * 0.35].forEach(tx => {
+            const tl = new THREE.Mesh(tlGeo, taillightMat);
+            tl.position.set(tx, 0.5 + cfg.bodyH * 0.4, rearZ);
+            group.add(tl);
+        });
+
+        // ============================================================
+        // FRONT SPIKES / RAM BAR
+        // ============================================================
+        const spikeMat = new THREE.MeshStandardMaterial({
+            color: 0xaaaaaa, metalness: 0.85, roughness: 0.15
+        });
+
+        // Ram bar — horizontal chrome bar
+        const barGeo = new THREE.CylinderGeometry(0.06, 0.06, cfg.bodyW * 0.85, 8);
+        const ramBar = new THREE.Mesh(barGeo, spikeMat);
+        ramBar.rotation.z = Math.PI / 2;
+        ramBar.position.set(0, 0.45, frontZ + 0.15);
+        ramBar.castShadow = true;
+        group.add(ramBar);
+
+        // Vertical ram bar supports
+        [-cfg.bodyW * 0.3, cfg.bodyW * 0.3].forEach(sx => {
+            const supportGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6);
+            const support = new THREE.Mesh(supportGeo, spikeMat);
+            support.position.set(sx, 0.6, frontZ + 0.1);
+            group.add(support);
+        });
+
+        // Front spikes — metallic cones protruding forward
+        const spikeCount = type === 'tank' ? 5 : 3;
+        const spikeSpacing = (cfg.bodyW * 0.7) / (spikeCount - 1);
+        const startX = -cfg.bodyW * 0.35;
+        const spikeLen = type === 'tank' ? 1.2 : 0.8;
+
+        for (let s = 0; s < spikeCount; s++) {
+            const spikeGeo = new THREE.ConeGeometry(0.07, spikeLen, 6);
+            const spike = new THREE.Mesh(spikeGeo, spikeMat);
+            spike.rotation.x = Math.PI / 2; // point forward (+Z)
+            spike.position.set(
+                startX + s * spikeSpacing,
+                0.45,
+                frontZ + 0.15 + spikeLen / 2
+            );
+            spike.castShadow = true;
+            group.add(spike);
+        }
+
+        // ============================================================
+        // BUMPERS
+        // ============================================================
+        const bumperMat = new THREE.MeshStandardMaterial({
+            color: 0x333333, metalness: 0.5, roughness: 0.4
+        });
+
+        // Front bumper
+        const fbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.15, 0.2);
+        const frontBumper = new THREE.Mesh(fbGeo, bumperMat);
+        frontBumper.position.set(0, 0.35, frontZ + 0.05);
+        frontBumper.castShadow = true;
+        group.add(frontBumper);
+
+        // Rear bumper
+        const rbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.15, 0.2);
+        const rearBumper = new THREE.Mesh(rbGeo, bumperMat);
+        rearBumper.position.set(0, 0.35, rearZ - 0.05);
+        rearBumper.castShadow = true;
+        group.add(rearBumper);
+
+        // ============================================================
+        // SIDE SKIRTS
+        // ============================================================
+        const skirtGeo = new THREE.BoxGeometry(0.08, 0.12, cfg.bodyL * 0.7);
+        [-cfg.bodyW / 2 - 0.04, cfg.bodyW / 2 + 0.04].forEach(sx => {
+            const skirt = new THREE.Mesh(skirtGeo, darkMat);
+            skirt.position.set(sx, 0.35, 0);
+            group.add(skirt);
+        });
+
+        // ============================================================
+        // EXHAUST PIPES (rear)
+        // ============================================================
+        const exhaustMat = new THREE.MeshStandardMaterial({
+            color: 0x555555, metalness: 0.7, roughness: 0.3
+        });
+        const exCount = type === 'tank' ? 1 : 2;
+        const exPositions = exCount === 1 ? [0] : [-cfg.bodyW * 0.25, cfg.bodyW * 0.25];
+        exPositions.forEach(ex => {
+            const pipeGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.4, 8);
+            const pipe = new THREE.Mesh(pipeGeo, exhaustMat);
+            pipe.rotation.x = Math.PI / 2;
+            pipe.position.set(ex, 0.25, rearZ - 0.25);
+            group.add(pipe);
+        });
+
+        // ============================================================
+        // SIDE MIRRORS (not for tank)
+        // ============================================================
+        if (type !== 'tank') {
+            const mirrorMat = new THREE.MeshStandardMaterial({
+                color: 0x333333, metalness: 0.7, roughness: 0.2
+            });
+            [-1, 1].forEach(side => {
+                // Mirror arm
+                const armGeo = new THREE.BoxGeometry(0.3, 0.04, 0.04);
+                const arm = new THREE.Mesh(armGeo, mirrorMat);
+                arm.position.set(
+                    side * (cfg.bodyW / 2 + 0.15),
+                    0.5 + cfg.bodyH + 0.1,
+                    cfg.cabinOffZ + cfg.cabinL * 0.3
+                );
+                group.add(arm);
+
+                // Mirror glass
+                const glassGeo = new THREE.BoxGeometry(0.04, 0.12, 0.1);
+                const glass = new THREE.Mesh(glassGeo, glassMat);
+                glass.position.set(
+                    side * (cfg.bodyW / 2 + 0.28),
+                    0.5 + cfg.bodyH + 0.1,
+                    cfg.cabinOffZ + cfg.cabinL * 0.3
+                );
+                group.add(glass);
+            });
+        }
+
+        // ============================================================
+        // VEHICLE-SPECIFIC DETAILS
+        // ============================================================
+        if (type === 'pickup') {
+            // Roof-mounted light bar
+            const lbGeo = new THREE.BoxGeometry(cfg.cabinW * 0.8, 0.08, 0.15);
+            const lbMat = new THREE.MeshStandardMaterial({
+                color: 0xffaa00, emissive: 0xffaa00, emissiveIntensity: 0.3
+            });
+            const lightBar = new THREE.Mesh(lbGeo, lbMat);
+            lightBar.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH + 0.04, cfg.cabinOffZ);
+            group.add(lightBar);
+
+            // Cargo bed rails
+            const railMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.6 });
+            [-cfg.bodyW * 0.45, cfg.bodyW * 0.45].forEach(rx => {
+                const railGeo = new THREE.BoxGeometry(0.05, 0.3, cfg.bodyL * 0.35);
+                const rail = new THREE.Mesh(railGeo, railMat);
+                rail.position.set(rx, 0.5 + cfg.bodyH + 0.15, -cfg.bodyL * 0.25);
+                group.add(rail);
+            });
+        }
+
+        if (type === 'van') {
+            // Luggage rack on top
+            const rackMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 });
+            const rackGeo = new THREE.BoxGeometry(cfg.cabinW * 0.7, 0.04, cfg.cabinL * 0.8);
+            const rack = new THREE.Mesh(rackGeo, rackMat);
+            rack.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH + 0.08, cfg.cabinOffZ);
+            group.add(rack);
+
+            // Rack supports
+            const supportGeo2 = new THREE.BoxGeometry(0.04, 0.12, 0.04);
+            [[-0.6, 0.5], [0.6, 0.5], [-0.6, -0.5], [0.6, -0.5]].forEach(([sx, sz]) => {
+                const sup = new THREE.Mesh(supportGeo2, rackMat);
+                sup.position.set(sx, 0.5 + cfg.bodyH + cfg.cabinH + 0.02, cfg.cabinOffZ + sz);
+                group.add(sup);
+            });
+        }
+
+        if (type === 'tank') {
+            // Extra armor plates on sides
+            const armorMat = new THREE.MeshStandardMaterial({
+                color: 0x445544, metalness: 0.3, roughness: 0.7
+            });
+            [-1, 1].forEach(side => {
+                const plateGeo = new THREE.BoxGeometry(0.12, cfg.bodyH * 0.6, cfg.bodyL * 0.4);
+                const plate = new THREE.Mesh(plateGeo, armorMat);
+                plate.position.set(side * (cfg.bodyW / 2 + 0.06), 0.5 + cfg.bodyH * 0.5, 0);
+                plate.castShadow = true;
+                group.add(plate);
+            });
+
+            // Track guards
+            [-cfg.bodyW / 2, cfg.bodyW / 2].forEach(tx => {
+                const guardGeo = new THREE.BoxGeometry(0.5, 0.1, cfg.bodyL + 0.2);
+                const guard = new THREE.Mesh(guardGeo, darkMat);
+                guard.position.set(tx, 0.5 + cfg.bodyH + 0.05, 0);
+                group.add(guard);
+            });
+        }
+
+        // ============================================================
+        // UNDERCARRIAGE GLOW (neon effect)
+        // ============================================================
+        const glowGeo = new THREE.PlaneGeometry(cfg.bodyW * 0.8, cfg.bodyL * 0.7);
+        const glowMat = new THREE.MeshBasicMaterial({
+            color, transparent: true, opacity: 0.15, side: THREE.DoubleSide
+        });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.rotation.x = -Math.PI / 2;
+        glow.position.set(0, 0.05, 0);
+        group.add(glow);
+
+        return group;
+    }
+
+    // ========================================================================
+    // Name Tag
+    // ========================================================================
+
+    setNameTag(name) {
+        if (this.nameSprite) {
+            this.group.remove(this.nameSprite);
+            this.nameSprite.material.map.dispose();
+            this.nameSprite.material.dispose();
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(8, 8, 240, 48);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 28px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(name, 128, 32);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        this.nameSprite = new THREE.Sprite(mat);
+        this.nameSprite.scale.set(4, 1, 1);
+        this.nameSprite.position.set(0, this.cfg.bodyH + (this.type === 'tank' ? 3.2 : 2.5), 0);
+        this.group.add(this.nameSprite);
+    }
+
+    // ========================================================================
+    // Physics (local car only)
+    // ========================================================================
+
+    updatePhysics(input, delta) {
+        const cfg = this.cfg;
+        const dt = Math.min(delta, 0.05); // cap at 50ms
+
+        // Acceleration
+        if (input.forward) {
+            this.speed += cfg.accel * dt;
+        } else if (input.backward) {
+            this.speed -= cfg.brakeDecel * dt;
+        }
+
+        // Friction / drag (frame-rate independent)
+        this.speed *= Math.pow(cfg.drag, dt * 60);
+
+        // Clamp speed
+        this.speed = Math.max(-cfg.maxSpeed * 0.3, Math.min(cfg.maxSpeed, this.speed));
+
+        // Kill tiny drift
+        if (!input.forward && !input.backward && Math.abs(this.speed) < 0.5) {
+            this.speed = 0;
+        }
+
+        // Turning (only when moving, scales with speed)
+        if (Math.abs(this.speed) > 1) {
+            const turnDir = this.speed > 0 ? 1 : -1;
+            const speedFactor = Math.min(1, Math.abs(this.speed) / 15);
+            if (input.left)  this.angle += cfg.turnSpeed * turnDir * speedFactor * dt;
+            if (input.right) this.angle -= cfg.turnSpeed * turnDir * speedFactor * dt;
+        }
+
+        // Update position
+        this.group.position.x += Math.sin(this.angle) * this.speed * dt;
+        this.group.position.z += Math.cos(this.angle) * this.speed * dt;
+        this.group.rotation.y = this.angle;
+
+        // Spin wheels
+        const wheelSpin = this.speed * dt * 2;
+        this.wheels.forEach(w => { w.rotation.x += wheelSpin; });
+    }
+
+    // ========================================================================
+    // Interpolation (remote cars)
+    // ========================================================================
+
+    updateFromServer(x, z, angle) {
+        this.targetX = x;
+        this.targetZ = z;
+        this.targetAngle = angle;
+    }
+
+    interpolate(factor) {
+        const f = Math.min(factor, 1);
+        this.group.position.x += (this.targetX - this.group.position.x) * f;
+        this.group.position.z += (this.targetZ - this.group.position.z) * f;
+
+        // Smooth angle interpolation
+        let diff = this.targetAngle - this.group.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.group.rotation.y += diff * f;
+
+        // Spin wheels based on movement
+        const dx = this.targetX - this.group.position.x;
+        const dz = this.targetZ - this.group.position.z;
+        const moveDist = Math.sqrt(dx * dx + dz * dz);
+        this.wheels.forEach(w => { w.rotation.x += moveDist * 0.5; });
+    }
+
+    // ========================================================================
+    // Damage & Respawn
+    // ========================================================================
+
+    takeDamage(amount) {
+        this.health -= amount;
+        if (this.health < 0) this.health = 0;
+        return this.health <= 0;
+    }
+
+    respawn(x, z) {
+        this.health = this.maxHealth;
+        this.speed = 0;
+        this.group.position.set(x, 0, z);
+        this.group.rotation.y = 0;
+        this.angle = 0;
+    }
+
+    getPosition() {
+        return this.group.position;
+    }
+
+    getSpeed() {
+        return this.speed;
+    }
+
+    getRadius() {
+        return this.cfg.bodyL / 2;
+    }
+
+    // ========================================================================
+    // Cleanup
+    // ========================================================================
+
+    destroy() {
+        this.scene.remove(this.group);
+        this.group.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (child.material.map) child.material.map.dispose();
+                child.material.dispose();
+            }
+        });
+    }
+}
