@@ -70,7 +70,8 @@ function createPlayer(id, name, vehicleType) {
         kills:       0,
         deaths:      0,
         vehicleType: type,
-        color:       getRandomColor()
+        color:       getRandomColor(),
+        coins:       0
     };
 }
 

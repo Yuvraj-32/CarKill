@@ -121,6 +121,41 @@ io.on('connection', (socket) => {
     });
 
     // ----------------------------------------------------------
+    // collectCoin — Player picked up a coin from the ground
+    // ----------------------------------------------------------
+    socket.on('collectCoin', (data) => {
+        const player = room.players.get(socket.id);
+        if (!player) return;
+        player.coins += (data.value || 1);
+        socket.emit('coinCollected', { coins: player.coins });
+    });
+
+    // ----------------------------------------------------------
+    // riverFall — Player fell into the river
+    // ----------------------------------------------------------
+    socket.on('riverFall', () => {
+        const victim = room.handleRiverFall(socket.id);
+        if (!victim) return;
+
+        io.emit('playerDied', {
+            killerId:   null,
+            killerName: '🌊 The River',
+            victimId:   socket.id,
+            victimName: victim.name
+        });
+
+        setTimeout(() => {
+            room.respawnPlayer(socket.id);
+            const respawned = room.getGameState().find((p) => p.id === socket.id);
+            if (respawned) {
+                io.emit('playerRespawned', respawned);
+            }
+        }, 3000);
+
+        io.emit('leaderboard', room.getLeaderboard());
+    });
+
+    // ----------------------------------------------------------
     // disconnect — Player leaves (tab close, network drop, etc.)
     // ----------------------------------------------------------
     socket.on('disconnect', () => {

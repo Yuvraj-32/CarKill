@@ -18,6 +18,8 @@ export class Game {
         this.lastCollisionTime = {}; // id -> timestamp
         this.shakeAmount = 0;
         this.flashAlpha = 0;
+        this.coins = 0;
+        this.rampBoostY = 0;        // current Y boost from ramp
 
         // ---- Renderer ----
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -55,6 +57,7 @@ export class Game {
         const cfg = VEHICLE_CONFIGS[vehicleType] || VEHICLE_CONFIGS.car;
         this.hud.setVehicleLabel(vehicleType);
         this.hud.updateHealth(cfg.maxHealth, cfg.maxHealth);
+        this.hud.updateCoins(0);
 
         // ---- Input ----
         this.keys = {};
@@ -115,15 +118,46 @@ export class Game {
             if (push) {
                 this.player.group.position.x += push.x;
                 this.player.group.position.z += push.z;
-                this.player.speed *= 0.5; // slow on impact
+                this.player.speed *= 0.5;
             }
 
             // Pit collision — fall in = death + lose points
             const pit = this.world.checkPitCollision(this.player.group.position);
             if (pit) {
                 this.network.sendPitFall();
-                // Immediate visual: "fall" the car
                 this.player.speed = 0;
+            }
+
+            // River collision — fall in = death (unless on bridge)
+            if (this.world.checkRiverCollision(this.player.group.position)) {
+                this.network.sendRiverFall();
+                this.player.speed = 0;
+            }
+
+            // Ramp boost — lift car when on ramp
+            const rampH = this.world.checkRamp(this.player.group.position);
+            if (rampH > 0) {
+                this.rampBoostY = Math.min(rampH, this.rampBoostY + delta * 8);
+                this.player.group.position.y = this.rampBoostY;
+                // Speed boost on ramp
+                if (Math.abs(this.player.speed) > 5) {
+                    this.player.speed *= 1 + delta * 0.5;
+                }
+            } else {
+                if (this.rampBoostY > 0) {
+                    this.rampBoostY -= delta * 12; // gravity back down
+                    if (this.rampBoostY < 0) this.rampBoostY = 0;
+                    this.player.group.position.y = this.rampBoostY;
+                }
+            }
+
+            // Coin collection
+            const collected = this.particles.collectCoins(this.player.getPosition());
+            if (collected.length > 0) {
+                const total = collected.reduce((a, b) => a + b, 0);
+                this.coins += total;
+                this.hud.updateCoins(this.coins);
+                this.network.sendCollectCoin(total);
             }
         }
 
@@ -151,24 +185,27 @@ export class Game {
             this.particles.spawnDust(dustPos, this.player.angle, Math.abs(this.player.speed));
         }
 
-        // 6. HUD updates
+        // 6. World animation (water flow)
+        this.world.update(delta);
+
+        // 7. HUD updates
         this.hud.updateHealth(this.player.health, this.player.maxHealth);
         this.hud.updateSpeed(this.player.speed);
 
-        // 7. Screen shake decay
+        // 8. Screen shake decay
         if (this.shakeAmount > 0) {
             this.shakeAmount *= 0.9;
             if (this.shakeAmount < 0.01) this.shakeAmount = 0;
         }
 
-        // 8. Flash overlay decay
+        // 9. Flash overlay decay
         if (this.flashAlpha > 0) {
             this.flashAlpha -= delta * 5;
             if (this.flashAlpha < 0) this.flashAlpha = 0;
             this._updateFlashOverlay();
         }
 
-        // 9. Render
+        // 10. Render
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -185,11 +222,8 @@ export class Game {
         const lookPos = new THREE.Vector3();
         this.player.cameraLookTarget.getWorldPosition(lookPos);
 
-        // Smooth follow
-        const lerpFactor = 1 - Math.pow(0.02, delta); // frame-rate independent
+        const lerpFactor = 1 - Math.pow(0.02, delta);
         this.camera.position.lerp(goalPos, lerpFactor);
-
-        // Look at point ahead of car
         this.camera.lookAt(lookPos);
 
         // Screen shake
@@ -238,23 +272,23 @@ export class Game {
                 if (now - lastTime < 300) continue;
                 this.lastCollisionTime[id] = now;
 
-                // Calculate impact force
+                // Calculate impact force — INCREASED for stronger hits
                 const impactSpeed = Math.abs(this.player.speed);
-                if (impactSpeed < 5) continue; // ignore very slow contacts
+                if (impactSpeed < 3) continue; // ignore very slow contacts
 
-                const force = Math.min(impactSpeed / 2, 50);
+                const force = Math.min(impactSpeed, 50);
 
                 // Send to server
                 this.network.sendCollision(id, force);
 
                 // Visual feedback
-                this.shakeAmount = force * 0.08;
+                this.shakeAmount = force * 0.1;
                 const collisionPos = new THREE.Vector3(
                     (myPos.x + rPos.x) / 2,
                     0.5,
                     (myPos.z + rPos.z) / 2
                 );
-                this.particles.spawnCollision(collisionPos, force / 25);
+                this.particles.spawnCollision(collisionPos, force / 20);
 
                 // Push back slightly
                 this.player.speed *= -0.3;
@@ -274,9 +308,10 @@ export class Game {
                 if (p.id !== net.id) {
                     this._addRemote(p);
                 } else {
-                    // Sync local player position from server
                     this.player.group.position.set(p.x3d, 0, p.z3d);
                     this.player.health = p.health;
+                    this.coins = p.coins || 0;
+                    this.hud.updateCoins(this.coins);
                 }
             });
         });
@@ -296,7 +331,14 @@ export class Game {
             const activeIds = new Set();
             players.forEach(p => {
                 activeIds.add(p.id);
-                if (p.id === net.id) return; // skip self
+                if (p.id === net.id) {
+                    // Sync coins from server
+                    if (p.coins !== undefined) {
+                        this.coins = p.coins;
+                        this.hud.updateCoins(this.coins);
+                    }
+                    return;
+                }
 
                 if (this.remotePlayers[p.id]) {
                     this.remotePlayers[p.id].updateFromServer(p.x3d, p.z3d, p.angle);
@@ -315,19 +357,34 @@ export class Game {
         net.on('playerHit', (data) => {
             if (!this.isDead) {
                 this.player.takeDamage(data.damage);
-                this.shakeAmount = 0.6;
-                this.flashAlpha = 0.4;
+                this.shakeAmount = 0.8;
+                this.flashAlpha = 0.5;
+
+                // Spark effect at player position
+                this.particles.spawnCollision(this.player.getPosition(), 0.5);
             }
         });
 
         net.on('playerDied', (data) => {
             this.hud.addKill(data.killerName, data.victimName);
 
+            // Explosion + coins at death location
+            const victimCar = data.victimId === net.id
+                ? this.player
+                : this.remotePlayers[data.victimId];
+
+            if (victimCar) {
+                const deathPos = victimCar.getPosition().clone();
+                deathPos.y = 0.5;
+                this.particles.spawnExplosion(deathPos);
+                this.particles.spawnCoins(deathPos, 5);
+            }
+
             if (data.victimId === net.id) {
                 this._onDeath(data.killerName);
             }
 
-            // Fade remote victim
+            // Hide remote victim
             if (this.remotePlayers[data.victimId]) {
                 this.remotePlayers[data.victimId].group.visible = false;
             }
@@ -346,6 +403,11 @@ export class Game {
 
         net.on('leaderboard', (data) => {
             this.hud.updateLeaderboard(data, net.id);
+        });
+
+        net.on('coinCollected', (data) => {
+            this.coins = data.coins;
+            this.hud.updateCoins(this.coins);
         });
     }
 
@@ -393,12 +455,13 @@ export class Game {
         this.player.speed = 0;
         this.player.group.visible = false;
         this.hud.showDeath(killerName);
-        this.shakeAmount = 1.5;
-        this.flashAlpha = 0.8;
+        this.shakeAmount = 2.0;
+        this.flashAlpha = 1.0;
     }
 
     _onRespawn(x, z) {
         this.isDead = false;
+        this.rampBoostY = 0;
         this.player.respawn(x, z);
         this.player.group.visible = true;
         this.hud.hideDeath();

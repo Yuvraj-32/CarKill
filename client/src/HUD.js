@@ -19,7 +19,8 @@ export class HUD {
             menu:            document.getElementById('menu-screen'),
             nameInput:       document.getElementById('player-name'),
             vehicleCards:    document.querySelectorAll('.vehicle-card'),
-            playBtn:         document.getElementById('play-btn')
+            playBtn:         document.getElementById('play-btn'),
+            coinCounter:     document.getElementById('coin-counter')
         };
 
         this.localPlayerId = null;
@@ -62,6 +63,14 @@ export class HUD {
     updateSpeed(speed) {
         const kmh = Math.abs(Math.round(speed * 3.6)); // rough conversion
         this.els.speedValue.textContent = kmh;
+    }
+
+    // ---- Coins ----
+
+    updateCoins(count) {
+        if (this.els.coinCounter) {
+            this.els.coinCounter.textContent = count;
+        }
     }
 
     // ---- Leaderboard ----

@@ -80,32 +80,31 @@ class GameRoom {
         const attacker = this.players.get(attackerId);
         const target   = this.players.get(targetId);
 
-        // --- Validate both players exist ---
         if (!attacker || !target) {
             return { valid: false, damage: 0, killed: false, killer: null, victim: null };
         }
 
-        // --- Distance check (must be within 150px) ---
+        // Distance check — increased to 400 for 3D coordinate sync tolerance
         const dx   = attacker.x - target.x;
         const dy   = attacker.y - target.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist >= 150) {
+        if (dist >= 400) {
             return { valid: false, damage: 0, killed: false, killer: null, victim: null };
         }
 
-        // --- Cap force and compute damage ---
+        // Damage: force * 0.4, minimum 10 — ~5 strong hits kills a car (80 HP)
         const cappedForce = Math.min(force, 50);
-        const damage      = cappedForce / 5;
+        const damage      = Math.max(cappedForce * 0.4, 10);
 
-        // --- Apply damage ---
         target.health -= damage;
         let killed = false;
 
         if (target.health <= 0) {
             target.health = 0;
             killed = true;
-            attacker.kills  += 1;
-            target.deaths   += 1;
+            attacker.kills += 1;
+            attacker.coins += 5;  // reward coins for kill
+            target.deaths  += 1;
         }
 
         return {
@@ -152,6 +151,13 @@ class GameRoom {
         return player;
     }
 
+    /**
+     * handleRiverFall — Player fell into the river. Same as pit fall.
+     */
+    handleRiverFall(id) {
+        return this.handlePitFall(id);
+    }
+
     // ----------------------------------------------------------
     // Serialization / queries
     // ----------------------------------------------------------
@@ -174,7 +180,8 @@ class GameRoom {
                 maxHealth:   player.maxHealth,
                 vehicleType: player.vehicleType,
                 color:       player.color,
-                kills:       player.kills
+                kills:       player.kills,
+                coins:       player.coins
             });
         });
         return state;
@@ -193,7 +200,8 @@ class GameRoom {
             name:        p.name,
             kills:       p.kills,
             deaths:      p.deaths,
-            vehicleType: p.vehicleType
+            vehicleType: p.vehicleType,
+            coins:       p.coins
         }));
     }
 

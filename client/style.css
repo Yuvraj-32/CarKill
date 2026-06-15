@@ -131,6 +131,35 @@ body {
   margin-top: -4px;
 }
 
+/* ---- Coin Counter ---- */
+#coin-panel {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 10px;
+  padding: 10px 16px;
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#coin-icon {
+  font-size: 22px;
+}
+
+#coin-counter {
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+}
+
 /* ---- Leaderboard ---- */
 #leaderboard-panel {
   position: absolute;

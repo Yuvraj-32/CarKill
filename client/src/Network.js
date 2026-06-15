@@ -49,6 +49,16 @@ export class Network {
         this.socket.emit('pitFall');
     }
 
+    sendRiverFall() {
+        if (!this.socket) return;
+        this.socket.emit('riverFall');
+    }
+
+    sendCollectCoin(value) {
+        if (!this.socket) return;
+        this.socket.emit('collectCoin', { value });
+    }
+
     get id() {
         return this.socket ? this.socket.id : null;
     }
@@ -98,6 +108,10 @@ export class Network {
 
         s.on('leaderboard', (data) => {
             this._emit('leaderboard', data);
+        });
+
+        s.on('coinCollected', (data) => {
+            this._emit('coinCollected', data);
         });
     }
 
