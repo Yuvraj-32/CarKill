@@ -61,11 +61,46 @@
     </div>
   </div>
 
-  <!-- ========== DEATH OVERLAY ========== -->
+  <!-- ========== DEATH OVERLAY + VEHICLE SHOP ========== -->
   <div id="death-overlay">
     <div id="death-title">WASTED</div>
     <div id="death-killer"></div>
-    <div id="death-countdown"></div>
+
+    <div id="death-shop">
+      <div id="shop-header">
+        <span id="shop-label">CHOOSE YOUR RIDE</span>
+        <span id="shop-coins">🪙 <span id="shop-coin-count">0</span></span>
+      </div>
+
+      <div id="shop-grid">
+        <div class="shop-card selected" data-type="car" data-cost="0">
+          <div class="shop-icon">🏎️</div>
+          <div class="shop-name">CAR</div>
+          <div class="shop-stats">SPD ★★★★★ | HP ★★</div>
+          <div class="shop-price free">FREE</div>
+        </div>
+        <div class="shop-card" data-type="pickup" data-cost="10">
+          <div class="shop-icon">🛻</div>
+          <div class="shop-name">PICKUP</div>
+          <div class="shop-stats">SPD ★★★★ | HP ★★★</div>
+          <div class="shop-price">🪙 10</div>
+        </div>
+        <div class="shop-card" data-type="van" data-cost="25">
+          <div class="shop-icon">🚐</div>
+          <div class="shop-name">VAN</div>
+          <div class="shop-stats">SPD ★★★ | HP ★★★★</div>
+          <div class="shop-price">🪙 25</div>
+        </div>
+        <div class="shop-card" data-type="tank" data-cost="50">
+          <div class="shop-icon">🪖</div>
+          <div class="shop-name">TANK</div>
+          <div class="shop-stats">SPD ★★ | HP ★★★★★</div>
+          <div class="shop-price">🪙 50</div>
+        </div>
+      </div>
+    </div>
+
+    <button id="respawn-btn">▶ RESPAWN</button>
   </div>
 
   <!-- ========== MAIN MENU ========== -->

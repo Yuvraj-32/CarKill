@@ -59,6 +59,11 @@ export class Game {
         this.hud.updateHealth(cfg.maxHealth, cfg.maxHealth);
         this.hud.updateCoins(0);
 
+        // ---- Respawn callback from death shop ----
+        this.hud.onRespawnCallback = (chosenVehicle) => {
+            this.network.requestRespawn(chosenVehicle);
+        };
+
         // ---- Input ----
         this.keys = {};
         this._setupInput();
@@ -392,7 +397,7 @@ export class Game {
 
         net.on('playerRespawned', (p) => {
             if (p.id === net.id) {
-                this._onRespawn(p.x3d, p.z3d);
+                this._onRespawn(p.x3d, p.z3d, p.vehicleType);
             } else if (this.remotePlayers[p.id]) {
                 const remote = this.remotePlayers[p.id];
                 remote.group.visible = true;
@@ -454,15 +459,26 @@ export class Game {
         this.isDead = true;
         this.player.speed = 0;
         this.player.group.visible = false;
-        this.hud.showDeath(killerName);
+        this.hud.showDeath(killerName, this.coins);
         this.shakeAmount = 2.0;
         this.flashAlpha = 1.0;
     }
 
-    _onRespawn(x, z) {
+    _onRespawn(x, z, newVehicleType) {
         this.isDead = false;
         this.rampBoostY = 0;
-        this.player.respawn(x, z);
+
+        // If vehicle type changed, rebuild the car
+        if (newVehicleType && newVehicleType !== this.vehicleType) {
+            this.vehicleType = newVehicleType;
+            this.player.destroy();
+            this.player = new Car(this.scene, x, z, newVehicleType, 0, true);
+            this.player.setNameTag(this.playerName);
+            this.hud.setVehicleLabel(newVehicleType);
+        } else {
+            this.player.respawn(x, z);
+        }
+
         this.player.group.visible = true;
         this.hud.hideDeath();
 

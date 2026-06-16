@@ -15,16 +15,21 @@ export class HUD {
             killFeed:        document.getElementById('kill-feed'),
             deathOverlay:    document.getElementById('death-overlay'),
             deathKiller:     document.getElementById('death-killer'),
-            deathCountdown:  document.getElementById('death-countdown'),
             menu:            document.getElementById('menu-screen'),
             nameInput:       document.getElementById('player-name'),
             vehicleCards:    document.querySelectorAll('.vehicle-card'),
             playBtn:         document.getElementById('play-btn'),
-            coinCounter:     document.getElementById('coin-counter')
+            coinCounter:     document.getElementById('coin-counter'),
+            shopCoinCount:   document.getElementById('shop-coin-count'),
+            shopCards:       document.querySelectorAll('.shop-card'),
+            respawnBtn:      document.getElementById('respawn-btn')
         };
 
         this.localPlayerId = null;
         this.killMessages = [];
+        this.selectedShopVehicle = 'car';
+        this.onRespawnCallback = null;
+        this._setupShop();
     }
 
     show() {
@@ -138,30 +143,64 @@ export class HUD {
         }
     }
 
-    // ---- Death Overlay ----
+    // ---- Death Overlay + Shop ----
 
-    showDeath(killerName) {
+    _setupShop() {
+        // Shop card selection
+        this.els.shopCards.forEach(card => {
+            card.addEventListener('click', () => {
+                if (card.classList.contains('locked')) return;
+                this.els.shopCards.forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                this.selectedShopVehicle = card.dataset.type;
+            });
+        });
+
+        // Respawn button
+        if (this.els.respawnBtn) {
+            this.els.respawnBtn.addEventListener('click', () => {
+                if (this.onRespawnCallback) {
+                    this.onRespawnCallback(this.selectedShopVehicle);
+                }
+            });
+        }
+    }
+
+    showDeath(killerName, currentCoins) {
         this.els.deathKiller.textContent = 'Eliminated by ' + killerName;
+
+        // Update shop coin display
+        if (this.els.shopCoinCount) {
+            this.els.shopCoinCount.textContent = currentCoins || 0;
+        }
+
+        // Update locked/unlocked state based on coins
+        const coins = currentCoins || 0;
+        this.els.shopCards.forEach(card => {
+            const cost = parseInt(card.dataset.cost) || 0;
+            card.classList.remove('locked');
+            if (cost > coins) {
+                card.classList.add('locked');
+                card.classList.remove('selected');
+            }
+        });
+
+        // Auto-select the best affordable car, or keep current selection
+        const currentSelected = document.querySelector('.shop-card.selected');
+        if (!currentSelected || currentSelected.classList.contains('locked')) {
+            // Select the first unlocked card
+            const firstUnlocked = document.querySelector('.shop-card:not(.locked)');
+            if (firstUnlocked) {
+                firstUnlocked.classList.add('selected');
+                this.selectedShopVehicle = firstUnlocked.dataset.type;
+            }
+        }
+
         this.els.deathOverlay.classList.add('visible');
-        this._startCountdown(3);
     }
 
     hideDeath() {
         this.els.deathOverlay.classList.remove('visible');
-    }
-
-    _startCountdown(seconds) {
-        let remaining = seconds;
-        this.els.deathCountdown.textContent = 'Respawning in ' + remaining + '...';
-        const interval = setInterval(() => {
-            remaining--;
-            if (remaining > 0) {
-                this.els.deathCountdown.textContent = 'Respawning in ' + remaining + '...';
-            } else {
-                this.els.deathCountdown.textContent = 'Respawning...';
-                clearInterval(interval);
-            }
-        }, 1000);
     }
 
     // ---- Menu ----

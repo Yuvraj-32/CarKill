@@ -136,6 +136,39 @@ class GameRoom {
     }
 
     /**
+     * respawnWithUpgrade — Respawn with a new vehicle type if affordable.
+     * Vehicle prices: car=0, pickup=10, van=25, tank=50
+     */
+    respawnWithUpgrade(id, newVehicleType) {
+        const player = this.players.get(id);
+        if (!player) return null;
+        if (player.health > 0) return null; // not dead
+
+        const prices = { car: 0, pickup: 10, van: 25, tank: 50 };
+        const type = PlayerManager.VEHICLE_TYPES[newVehicleType] ? newVehicleType : player.vehicleType;
+        const cost = prices[type] || 0;
+
+        if (player.coins < cost) return null; // can't afford
+        player.coins -= cost;
+
+        // Upgrade vehicle stats
+        if (type !== player.vehicleType) {
+            const stats = PlayerManager.VEHICLE_TYPES[type];
+            player.vehicleType = type;
+            player.maxHealth = stats.maxHealth;
+        }
+
+        // Respawn at new location
+        const spawn = PlayerManager.getRandomSpawnPoint();
+        player.health = player.maxHealth;
+        player.x = spawn.x;
+        player.y = spawn.y;
+        player.speed = 0;
+
+        return player;
+    }
+
+    /**
      * handlePitFall — Player fell into a pit. Increment deaths,
      * decrement kills (min 0), and set health to 0.
      */

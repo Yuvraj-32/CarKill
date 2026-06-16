@@ -80,15 +80,7 @@ io.on('connection', (socket) => {
                 victimName: result.victim.name
             });
 
-            // Respawn after 3 seconds
-            const victimId = result.victim.id;
-            setTimeout(() => {
-                room.respawnPlayer(victimId);
-                const respawned = room.getGameState().find((p) => p.id === victimId);
-                if (respawned) {
-                    io.emit('playerRespawned', respawned);
-                }
-            }, 3000);
+            // No auto-respawn — client sends 'requestRespawn'
 
             // Update leaderboard after a kill
             io.emit('leaderboard', room.getLeaderboard());
@@ -109,13 +101,7 @@ io.on('connection', (socket) => {
             victimName: victim.name
         });
 
-        setTimeout(() => {
-            room.respawnPlayer(socket.id);
-            const respawned = room.getGameState().find((p) => p.id === socket.id);
-            if (respawned) {
-                io.emit('playerRespawned', respawned);
-            }
-        }, 3000);
+        // No auto-respawn — client sends 'requestRespawn'
 
         io.emit('leaderboard', room.getLeaderboard());
     });
@@ -144,14 +130,25 @@ io.on('connection', (socket) => {
             victimName: victim.name
         });
 
-        setTimeout(() => {
-            room.respawnPlayer(socket.id);
-            const respawned = room.getGameState().find((p) => p.id === socket.id);
-            if (respawned) {
-                io.emit('playerRespawned', respawned);
-            }
-        }, 3000);
+        // No auto-respawn — client sends 'requestRespawn'
 
+        io.emit('leaderboard', room.getLeaderboard());
+    });
+
+    // ----------------------------------------------------------
+    // requestRespawn — Player clicked respawn (with optional upgrade)
+    // ----------------------------------------------------------
+    socket.on('requestRespawn', (data) => {
+        const vehicleType = (data && data.vehicleType) || 'car';
+        const player = room.respawnWithUpgrade(socket.id, vehicleType);
+        if (!player) return;
+
+        const respawned = room.getGameState().find((p) => p.id === socket.id);
+        if (respawned) {
+            io.emit('playerRespawned', respawned);
+        }
+        // Send updated coin count to the player
+        socket.emit('coinCollected', { coins: player.coins });
         io.emit('leaderboard', room.getLeaderboard());
     });
 

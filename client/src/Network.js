@@ -59,6 +59,11 @@ export class Network {
         this.socket.emit('collectCoin', { value });
     }
 
+    requestRespawn(vehicleType) {
+        if (!this.socket) return;
+        this.socket.emit('requestRespawn', { vehicleType });
+    }
+
     get id() {
         return this.socket ? this.socket.id : null;
     }
