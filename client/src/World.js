@@ -341,39 +341,6 @@ export class World {
                 group.add(beam);
             });
 
-            // Log railings
-            [-1, 1].forEach(side => {
-                // Top horizontal log
-                const topLog = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.12, 0.12, bridgeLen, 6),
-                    new THREE.MeshStandardMaterial({ color: logColor, roughness: 0.85 })
-                );
-                topLog.rotation.x = Math.PI / 2;
-                topLog.position.set(side * (cfg.w / 2 - 0.3), 1.5, 0);
-                topLog.castShadow = true;
-                group.add(topLog);
-
-                // Middle horizontal log
-                const midLog = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.08, 0.08, bridgeLen, 6),
-                    new THREE.MeshStandardMaterial({ color: logColor, roughness: 0.85 })
-                );
-                midLog.rotation.x = Math.PI / 2;
-                midLog.position.set(side * (cfg.w / 2 - 0.3), 1.15, 0);
-                group.add(midLog);
-
-                // Vertical posts
-                for (let v = -bridgeLen / 2 + 1; v < bridgeLen / 2; v += 2.5) {
-                    const post = new THREE.Mesh(
-                        new THREE.CylinderGeometry(0.1, 0.12, 0.9, 6),
-                        new THREE.MeshStandardMaterial({ color: logColor, roughness: 0.9 })
-                    );
-                    post.position.set(side * (cfg.w / 2 - 0.3), 1.15, v);
-                    post.castShadow = true;
-                    group.add(post);
-                }
-            });
-
             // Support pillars in water (thick logs)
             [-1, 0, 1].forEach(pIdx => {
                 [-1, 1].forEach(side => {
@@ -387,7 +354,7 @@ export class World {
                 });
             });
 
-            group.position.set(cfg.x, 0, riverZ);
+            group.position.set(cfg.x, -0.80, riverZ);
             this.scene.add(group);
         });
     }
@@ -433,17 +400,6 @@ export class World {
             );
             stripe.position.set(0, totalH + 0.04, (stepCount / 2 - 0.5) * stepD);
             group.add(stripe);
-
-            // Side walls
-            [-1, 1].forEach(side => {
-                const wallGeo = new THREE.BoxGeometry(0.3, totalH + 0.3, totalD);
-                const wall = new THREE.Mesh(wallGeo, new THREE.MeshStandardMaterial({
-                    color: 0x556677, roughness: 0.7, metalness: 0.2
-                }));
-                wall.position.set(side * (rampW / 2 + 0.15), (totalH + 0.3) / 2, 0);
-                wall.castShadow = true;
-                group.add(wall);
-            });
 
             group.rotation.y = cfg.rotY;
             group.position.set(cfg.x, 0, cfg.z);
