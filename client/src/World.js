@@ -211,7 +211,7 @@ export class World {
     // ========================================================================
 
     _createRiver() {
-        const riverWidth = 12;
+        const riverWidth = 24;
         const hw = riverWidth / 2;
         const riverZ = HALF;
 
@@ -301,7 +301,7 @@ export class World {
             { x: 220, w: 10 }
         ];
         const riverZ = HALF;
-        const bridgeLen = 22;
+        const bridgeLen = 30;
 
         // Wood textures
         const plankColor = 0x8B6914;
@@ -368,9 +368,9 @@ export class World {
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
 
         const configs = [
-            { x: 40, z: 138, rotY: 0 },
-            { x: 150, z: 162, rotY: Math.PI },
-            { x: 260, z: 138, rotY: 0 }
+            { x: 40, z: 132, rotY: 0 },
+            { x: 150, z: 168, rotY: Math.PI },
+            { x: 260, z: 132, rotY: 0 }
         ];
 
         const rampW = 8, totalH = 4.0, totalD = 12;
