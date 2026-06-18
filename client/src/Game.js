@@ -133,26 +133,33 @@ export class Game {
                 this.player.speed = 0;
             }
 
-            // River collision — fall in = death (unless on bridge)
-            if (this.world.checkRiverCollision(this.player.group.position)) {
+            // River collision — fall in = death (unless on bridge or flying over)
+            if (this.player.group.position.y <= 0.1 && this.world.checkRiverCollision(this.player.group.position)) {
                 this.network.sendRiverFall();
                 this.player.speed = 0;
             }
 
-            // Ramp boost — lift car when on ramp
+            // Ramp boost & Air physics
             const rampH = this.world.checkRamp(this.player.group.position);
             if (rampH > 0) {
-                this.rampBoostY = Math.min(rampH, this.rampBoostY + delta * 8);
-                this.player.group.position.y = this.rampBoostY;
+                this.player.group.position.y = Math.max(this.player.group.position.y, rampH);
+                this.player.velocityY = Math.max(10, Math.abs(this.player.speed) * 0.4);
+                
                 // Speed boost on ramp
                 if (Math.abs(this.player.speed) > 5) {
                     this.player.speed *= 1 + delta * 0.5;
                 }
             } else {
-                if (this.rampBoostY > 0) {
-                    this.rampBoostY -= delta * 12; // gravity back down
-                    if (this.rampBoostY < 0) this.rampBoostY = 0;
-                    this.player.group.position.y = this.rampBoostY;
+                if (this.player.group.position.y > 0) {
+                    this.player.velocityY = (this.player.velocityY || 0) - 40 * delta; // Gravity
+                    this.player.group.position.y += this.player.velocityY * delta;
+                    if (this.player.group.position.y < 0) {
+                        this.player.group.position.y = 0;
+                        this.player.velocityY = 0;
+                    }
+                } else {
+                    this.player.group.position.y = 0;
+                    this.player.velocityY = 0;
                 }
             }
 
@@ -166,9 +173,29 @@ export class Game {
             }
         }
 
-        // 2. Interpolate remote players
+        // 2. Interpolate remote players & apply air physics
         for (const id in this.remotePlayers) {
-            this.remotePlayers[id].interpolate(0.15);
+            const remote = this.remotePlayers[id];
+            remote.interpolate(0.15);
+
+            // Remote ramp physics
+            const rh = this.world.checkRamp(remote.group.position);
+            if (rh > 0) {
+                remote.group.position.y = Math.max(remote.group.position.y, rh);
+                remote.velocityY = Math.max(10, Math.abs(remote.speed || 30) * 0.4);
+            } else {
+                if (remote.group.position.y > 0) {
+                    remote.velocityY = (remote.velocityY || 0) - 40 * delta;
+                    remote.group.position.y += remote.velocityY * delta;
+                    if (remote.group.position.y < 0) {
+                        remote.group.position.y = 0;
+                        remote.velocityY = 0;
+                    }
+                } else {
+                    remote.group.position.y = 0;
+                    remote.velocityY = 0;
+                }
+            }
         }
 
         // 3. Check local-vs-remote collisions

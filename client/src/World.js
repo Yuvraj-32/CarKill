@@ -368,13 +368,15 @@ export class World {
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
 
         const configs = [
-            { x: 55, z: 55, rotY: Math.PI * 0.25 },
-            { x: 245, z: 55, rotY: -Math.PI * 0.25 },
-            { x: 55, z: 245, rotY: Math.PI * 0.75 },
-            { x: 245, z: 245, rotY: -Math.PI * 0.75 },
+            { x: 40, z: 138, rotY: 0 },
+            { x: 40, z: 162, rotY: Math.PI },
+            { x: 150, z: 138, rotY: 0 },
+            { x: 150, z: 162, rotY: Math.PI },
+            { x: 260, z: 138, rotY: 0 },
+            { x: 260, z: 162, rotY: Math.PI },
         ];
 
-        const rampW = 8, totalH = 2.5, totalD = 12;
+        const rampW = 8, totalH = 4.0, totalD = 12;
         const stepCount = 10;
         const stepH = totalH / stepCount;
         const stepD = totalD / stepCount;
@@ -407,8 +409,9 @@ export class World {
 
             this.ramps.push({
                 x: cfg.x, z: cfg.z,
-                w: 10, d: 10,
-                height: totalH
+                w: rampW, d: totalD,
+                height: totalH,
+                rotY: cfg.rotY
             });
         });
     }
@@ -567,8 +570,14 @@ export class World {
 
     checkRamp(pos) {
         for (const ramp of this.ramps) {
-            const dx = Math.abs(pos.x - ramp.x), dz = Math.abs(pos.z - ramp.z);
-            if (dx < ramp.w / 2 && dz < ramp.d / 2) return ramp.height;
+            const dx = Math.abs(pos.x - ramp.x);
+            const dz = Math.abs(pos.z - ramp.z);
+            if (dx < ramp.w / 2 && dz < ramp.d / 2) {
+                let localZ = (ramp.rotY === 0) ? (pos.z - ramp.z) : (ramp.z - pos.z);
+                let progress = (localZ + ramp.d / 2) / ramp.d;
+                progress = Math.max(0, Math.min(1, progress));
+                return progress * ramp.height;
+            }
         }
         return 0;
     }
