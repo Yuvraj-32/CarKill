@@ -369,11 +369,8 @@ export class World {
 
         const configs = [
             { x: 40, z: 138, rotY: 0 },
-            { x: 40, z: 162, rotY: Math.PI },
-            { x: 150, z: 138, rotY: 0 },
             { x: 150, z: 162, rotY: Math.PI },
-            { x: 260, z: 138, rotY: 0 },
-            { x: 260, z: 162, rotY: Math.PI },
+            { x: 260, z: 138, rotY: 0 }
         ];
 
         const rampW = 8, totalH = 4.0, totalD = 12;
