@@ -277,6 +277,41 @@ export class Game {
         window.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
         });
+
+        // Mobile touch controls
+        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouch) {
+            const mc = document.getElementById('mobile-controls');
+            if (mc) mc.style.display = 'block';
+
+            const bindBtn = (id, key) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                
+                // Touch events
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); // prevent zoom/scroll
+                    this.keys[key] = true;
+                }, { passive: false });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.keys[key] = false;
+                }, { passive: false });
+                btn.addEventListener('touchcancel', (e) => {
+                    this.keys[key] = false;
+                });
+
+                // Mouse fallback for testing
+                btn.addEventListener('mousedown', (e) => { this.keys[key] = true; });
+                btn.addEventListener('mouseup', (e) => { this.keys[key] = false; });
+                btn.addEventListener('mouseleave', (e) => { this.keys[key] = false; });
+            };
+
+            bindBtn('btn-up', 'ArrowUp');
+            bindBtn('btn-down', 'ArrowDown');
+            bindBtn('btn-left', 'ArrowLeft');
+            bindBtn('btn-right', 'ArrowRight');
+        }
     }
 
     // ========================================================================

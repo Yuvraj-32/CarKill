@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Vehikill.io — A fast-paced 3D multiplayer vehicular combat arena. Ram, wreck, and dominate in this action-packed .io game.">
   <title>Vehikill.io — Vehicular Combat Arena</title>
 
@@ -58,6 +58,18 @@
     <!-- Controls hint — bottom left -->
     <div id="controls-hint">
       <span>WASD</span> / <span>↑↓←→</span> to drive
+    </div>
+
+    <!-- Mobile Controls (hidden on desktop) -->
+    <div id="mobile-controls">
+      <div id="mc-steer">
+        <button id="btn-left" class="mc-btn">◀</button>
+        <button id="btn-right" class="mc-btn">▶</button>
+      </div>
+      <div id="mc-drive">
+        <button id="btn-down" class="mc-btn">▼</button>
+        <button id="btn-up" class="mc-btn">▲</button>
+      </div>
     </div>
   </div>
 

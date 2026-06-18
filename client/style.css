@@ -667,3 +667,56 @@ body {
 #play-btn:active {
   transform: scale(0.97);
 }
+
+/* ============================================================================
+   MOBILE CONTROLS
+   ============================================================================ */
+
+#mobile-controls {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.mc-btn {
+  width: 65px;
+  height: 65px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(0, 255, 255, 0.4);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 24px;
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+}
+
+.mc-btn:active {
+  background: rgba(0, 255, 255, 0.4);
+  transform: scale(0.95);
+}
+
+#mc-steer {
+  position: absolute;
+  bottom: 0;
+  left: 30px;
+  display: flex;
+  gap: 15px;
+}
+
+#mc-drive {
+  position: absolute;
+  bottom: 0;
+  right: 30px;
+  display: flex;
+  gap: 15px;
+}
