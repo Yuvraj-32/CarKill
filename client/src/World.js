@@ -4,6 +4,7 @@
 // Arena: 300×300 units (maps to server's 3000×3000 ÷ 10)
 // ============================================================================
 import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
 
 export const ARENA_SIZE = 300;
 const HALF = ARENA_SIZE / 2;
@@ -42,7 +43,9 @@ export class World {
         const texture = this._createAsphaltTexture();
         const geo = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
         const mat = new THREE.MeshStandardMaterial({
-            map: texture, roughness: 0.85, metalness: 0.1
+            map: texture,
+            bumpMap: texture, bumpScale: 0.15,
+            roughness: 0.95, metalness: 0.05
         });
         const ground = new THREE.Mesh(geo, mat);
         ground.rotation.x = -Math.PI / 2;
@@ -257,14 +260,14 @@ export class World {
         bed.position.set(HALF, -0.75, riverZ);
         this.scene.add(bed);
 
-        // Water surface — sky blue
+        // Water surface — deep realistic blue
         const water = new THREE.Mesh(
             new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth),
             new THREE.MeshStandardMaterial({
-                map: waterTexture,
-                color: 0x87ceeb,
-                transparent: true, opacity: 0.85,
-                roughness: 0.15, metalness: 0.3
+                color: 0x003366,
+                transparent: true, opacity: 0.9,
+                roughness: 0.05, metalness: 0.85,
+                bumpMap: waterTexture, bumpScale: 0.04
             })
         );
         water.rotation.x = -Math.PI / 2;
@@ -303,26 +306,25 @@ export class World {
         const riverZ = HALF;
         const bridgeLen = 30;
 
-        // Wood textures
-        const plankColor = 0x8B6914;
+        // Realistic procedural wood texture
+        const woodTex = this._createWoodTexture();
         const darkWood = 0x5C4033;
-        const logColor = 0x6B4226;
 
         bridgeConfigs.forEach(cfg => {
             const group = new THREE.Group();
 
             // Main deck — thick wooden planks
-            const deckMat = new THREE.MeshStandardMaterial({ color: plankColor, roughness: 0.85, metalness: 0.05 });
+            const deckMat = new THREE.MeshStandardMaterial({ 
+                map: woodTex, bumpMap: woodTex, bumpScale: 0.05, 
+                roughness: 0.85, metalness: 0.05 
+            });
 
             // Individual planks across the bridge
             const plankW = cfg.w - 0.6;
             for (let p = -bridgeLen / 2; p < bridgeLen / 2; p += 0.8) {
                 const plank = new THREE.Mesh(
                     new THREE.BoxGeometry(plankW, 0.12, 0.7),
-                    new THREE.MeshStandardMaterial({
-                        color: new THREE.Color(plankColor).offsetHSL(0, 0, (Math.random() - 0.5) * 0.08),
-                        roughness: 0.9, metalness: 0.02
-                    })
+                    deckMat
                 );
                 plank.position.set(0, 0.76, p);
                 plank.castShadow = true;
@@ -364,7 +366,11 @@ export class World {
     // ========================================================================
 
     _createRamps() {
-        const rampMat = new THREE.MeshStandardMaterial({ color: 0x667788, roughness: 0.6, metalness: 0.3 });
+        const woodTex = this._createWoodTexture();
+        const rampMat = new THREE.MeshStandardMaterial({ 
+            map: woodTex, bumpMap: woodTex, bumpScale: 0.04, 
+            roughness: 0.8, metalness: 0.1 
+        });
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
 
         const configs = [
@@ -468,31 +474,70 @@ export class World {
     }
 
     // ========================================================================
+    // Wood Texture Generator
+    // ========================================================================
+
+    _createWoodTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#6b4c2a';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 200; i++) {
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(50, 30, 10, ${Math.random() * 0.25 + 0.05})`;
+            const y1 = Math.random() * 512;
+            const y2 = y1 + (Math.random() - 0.5) * 40;
+            ctx.moveTo(0, y1);
+            ctx.bezierCurveTo(170, y1 + 15, 340, y2 - 15, 512, y2);
+            ctx.stroke();
+        }
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
+        for (let i = 0; i < 6000; i++) {
+            ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, Math.random() * 5);
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 2);
+        return texture;
+    }
+
+    // ========================================================================
     // Sky
     // ========================================================================
 
     _createSky() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 2; canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
-        gradient.addColorStop(0, '#050520');
-        gradient.addColorStop(0.25, '#0a0a3a');
-        gradient.addColorStop(0.5, '#1a1040');
-        gradient.addColorStop(0.75, '#2d1b69');
-        gradient.addColorStop(0.9, '#4a1a5e');
-        gradient.addColorStop(1.0, '#ff6b35');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 2, 512);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        for (let i = 0; i < 60; i++) ctx.fillRect(Math.random() * 2, Math.random() * 256, 1, 1);
+        this.sky = new Sky();
+        this.sky.scale.setScalar(450000);
+        this.scene.add(this.sky);
 
-        const sky = new THREE.Mesh(
-            new THREE.SphereGeometry(480, 32, 32),
-            new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.BackSide })
-        );
-        sky.position.set(HALF, 0, HALF);
-        this.scene.add(sky);
+        this.sunPosition = new THREE.Vector3();
+
+        const effectController = {
+            turbidity: 10,
+            rayleigh: 2,
+            mieCoefficient: 0.005,
+            mieDirectionalG: 0.8,
+            elevation: 25, 
+            azimuth: 180, 
+            exposure: 1.1
+        };
+
+        const uniforms = this.sky.material.uniforms;
+        uniforms['turbidity'].value = effectController.turbidity;
+        uniforms['rayleigh'].value = effectController.rayleigh;
+        uniforms['mieCoefficient'].value = effectController.mieCoefficient;
+        uniforms['mieDirectionalG'].value = effectController.mieDirectionalG;
+
+        const phi = THREE.MathUtils.degToRad(90 - effectController.elevation);
+        const theta = THREE.MathUtils.degToRad(effectController.azimuth);
+        this.sunPosition.setFromSphericalCoords(1, phi, theta);
+        uniforms['sunPosition'].value.copy(this.sunPosition);
     }
 
     // ========================================================================
@@ -500,22 +545,24 @@ export class World {
     // ========================================================================
 
     _setupLighting() {
-        this.scene.add(new THREE.AmbientLight(0x404060, 0.5));
-        this.scene.add(new THREE.HemisphereLight(0x6688cc, 0x332244, 0.4));
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.5));
 
-        const sun = new THREE.DirectionalLight(0xffeedd, 1.8);
-        sun.position.set(HALF + 60, 100, HALF + 40);
+        const sun = new THREE.DirectionalLight(0xffeedd, 2.0);
+        sun.position.copy(this.sunPosition).multiplyScalar(200);
         sun.target.position.set(HALF, 0, HALF);
+        sun.position.add(sun.target.position);
+
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
-        sun.shadow.camera.near = 1; sun.shadow.camera.far = 300;
+        sun.shadow.camera.near = 1; sun.shadow.camera.far = 600;
         sun.shadow.camera.left = -HALF; sun.shadow.camera.right = HALF;
         sun.shadow.camera.top = HALF; sun.shadow.camera.bottom = -HALF;
         sun.shadow.bias = -0.001;
         this.scene.add(sun); this.scene.add(sun.target);
     }
 
-    _setupFog() { this.scene.fog = new THREE.FogExp2(0x0d0d25, 0.006); }
+    _setupFog() { this.scene.fog = new THREE.FogExp2(0xa0c8f0, 0.0035); }
 
     // ========================================================================
     // Update (call per frame)
