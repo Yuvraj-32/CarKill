@@ -6,25 +6,25 @@ import * as THREE from 'three';
 // Vehicle configs — physics values tuned for 3D space (arena 300×300)
 export const VEHICLE_CONFIGS = {
     car: {
-        maxSpeed: 55, accel: 50, brakeDecel: 65, drag: 0.97,
+        maxSpeed: 80, accel: 70, brakeDecel: 85, drag: 0.97,
         turnSpeed: 2.8, maxHealth: 80,
         bodyW: 1.8, bodyH: 0.6, bodyL: 4,
         cabinW: 1.5, cabinH: 0.45, cabinL: 1.8, cabinOffZ: -0.3
     },
     pickup: {
-        maxSpeed: 45, accel: 38, brakeDecel: 55, drag: 0.965,
+        maxSpeed: 65, accel: 55, brakeDecel: 75, drag: 0.965,
         turnSpeed: 2.4, maxHealth: 120,
         bodyW: 2.0, bodyH: 0.7, bodyL: 4.5,
         cabinW: 1.7, cabinH: 0.5, cabinL: 1.8, cabinOffZ: 0.2
     },
     van: {
-        maxSpeed: 35, accel: 28, brakeDecel: 42, drag: 0.96,
+        maxSpeed: 50, accel: 42, brakeDecel: 60, drag: 0.96,
         turnSpeed: 1.9, maxHealth: 180,
         bodyW: 2.3, bodyH: 1.0, bodyL: 5.0,
         cabinW: 2.1, cabinH: 0.65, cabinL: 2.2, cabinOffZ: -0.2
     },
     tank: {
-        maxSpeed: 25, accel: 22, brakeDecel: 30, drag: 0.955,
+        maxSpeed: 38, accel: 32, brakeDecel: 45, drag: 0.955,
         turnSpeed: 1.4, maxHealth: 280,
         bodyW: 2.8, bodyH: 0.85, bodyL: 5.5,
         cabinW: 2.0, cabinH: 0.5, cabinL: 2.5, cabinOffZ: -0.5
