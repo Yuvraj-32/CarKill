@@ -296,6 +296,7 @@ body {
   pointer-events: none;
   transition: opacity 0.3s;
   gap: 12px;
+  overflow-y: auto;
 }
 
 #death-overlay.visible {
@@ -464,6 +465,7 @@ body {
   justify-content: center;
   align-items: center;
   z-index: 200;
+  overflow-y: auto;
 }
 
 /* Animated background shimmer */
@@ -746,14 +748,7 @@ body {
 
 /* Adjust Main Menu for Landscape/Short screens */
 @media (max-height: 500px) {
-  #menu-screen {
-    overflow-y: auto;
-  }
-  #menu-content {
-    margin: auto;
-    padding-top: 20px;
-    padding-bottom: 20px;
-  }
+  #menu-content { margin: auto; padding-top: 20px; padding-bottom: 20px; }
   #menu-title { font-size: 36px; letter-spacing: 2px; }
   #menu-subtitle { font-size: 11px; margin-bottom: 15px; }
   #name-section { margin-bottom: 15px; }
@@ -764,4 +759,22 @@ body {
   .vc-name { font-size: 11px; margin-bottom: 6px; }
   #play-btn { padding: 10px 30px; font-size: 18px; }
   #landscape-hint { margin-top: 10px !important; }
+}
+
+/* Adjust for Portrait Mobile (narrow width) */
+@media (max-width: 768px) {
+  #menu-content { padding-top: 30px; padding-bottom: 30px; margin: auto; }
+  #menu-title { font-size: 42px; letter-spacing: 2px; }
+  #player-name { width: 100%; max-width: 280px; }
+  #vehicle-grid { flex-wrap: wrap; gap: 10px; }
+  .vehicle-card { width: calc(50% - 5px); }
+
+  /* Wasted Screen */
+  #death-overlay { justify-content: flex-start; padding-top: 40px; padding-bottom: 40px; }
+  #death-title { font-size: 48px; letter-spacing: 4px; }
+  #death-shop { width: 95%; padding: 12px; }
+  #shop-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .shop-card { padding: 10px 4px; }
+  .shop-icon { font-size: 28px; }
+  #respawn-btn { margin-top: 20px; font-size: 16px; padding: 12px 30px; }
 }
