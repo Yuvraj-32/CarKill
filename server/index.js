@@ -1,5 +1,5 @@
 // ============================================================
-// index.js — Vehikill.io main server entry point
+// index.js — ClashWars main server entry point
 // Express static file server + Socket.io real-time game server
 // ============================================================
 
@@ -185,5 +185,5 @@ setInterval(() => {
 // ============================================================
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`[Vehikill.io] Server running on port ${PORT}`);
+    console.log(`[ClashWars] Server running on port ${PORT}`);
 });

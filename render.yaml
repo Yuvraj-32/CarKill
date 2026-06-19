@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: vehikill-io
+    name: clashwars
     runtime: node
     plan: free
     buildCommand: npm install

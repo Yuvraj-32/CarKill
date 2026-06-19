@@ -1,7 +1,7 @@
 {
-  "name": "vehikill-io",
+  "name": "clashwars",
   "version": "1.0.0",
-  "description": "Vehikill.io - Multiplayer Vehicular Combat Arena",
+  "description": "ClashWars - Multiplayer Vehicular Combat Arena",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
