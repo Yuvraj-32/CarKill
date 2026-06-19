@@ -71,7 +71,9 @@ export class Car {
 
         // Physics state
         this.speed = 0;
-        this.angle = 0;  // rotation.y in radians
+        this.angle = 0; // rotation.y in radians
+        this.bounce = { x: 0, z: 0 };
+
         this.health = cfg.maxHealth;
         this.maxHealth = cfg.maxHealth;
 
@@ -486,6 +488,14 @@ export class Car {
         this.group.position.x += Math.sin(this.angle) * this.speed * dt;
         this.group.position.z += Math.cos(this.angle) * this.speed * dt;
         this.group.rotation.y = this.angle;
+
+        // Apply dynamic bounce velocity
+        if (Math.abs(this.bounce.x) > 0.1 || Math.abs(this.bounce.z) > 0.1) {
+            this.group.position.x += this.bounce.x * dt;
+            this.group.position.z += this.bounce.z * dt;
+            this.bounce.x *= Math.pow(0.005, dt); // Heavy friction for bounce
+            this.bounce.z *= Math.pow(0.005, dt);
+        }
 
         // Spin wheels
         const wheelSpin = this.speed * dt * 2;

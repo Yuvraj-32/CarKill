@@ -360,15 +360,18 @@ export class Game {
                 // Bounce back physically (Elastic collision effect)
                 const overlap = minDist - dist;
                 if (overlap > 0 && dist > 0.001) {
-                    // Push outwards along the collision normal
-                    const pushX = (dx / dist) * overlap * 1.5;
-                    const pushZ = (dz / dist) * overlap * 1.5;
-                    this.player.group.position.x += pushX;
-                    this.player.group.position.z += pushZ;
+                    // Instant push out to prevent sticking
+                    this.player.group.position.x += (dx / dist) * overlap * 1.1;
+                    this.player.group.position.z += (dz / dist) * overlap * 1.1;
+
+                    // Add massive physical bounce velocity based on impact force
+                    const bounceStrength = Math.max(30, force * 1.5);
+                    this.player.bounce.x = (dx / dist) * bounceStrength;
+                    this.player.bounce.z = (dz / dist) * bounceStrength;
                 }
 
-                // Reverse speed dramatically
-                this.player.speed *= -0.8;
+                // Reverse speed and reduce it 
+                this.player.speed *= -0.5;
             }
         }
     }
