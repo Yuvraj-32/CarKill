@@ -357,8 +357,18 @@ export class Game {
                 );
                 this.particles.spawnCollision(collisionPos, force / 20);
 
-                // Push back slightly
-                this.player.speed *= -0.3;
+                // Bounce back physically (Elastic collision effect)
+                const overlap = minDist - dist;
+                if (overlap > 0 && dist > 0.001) {
+                    // Push outwards along the collision normal
+                    const pushX = (dx / dist) * overlap * 1.5;
+                    const pushZ = (dz / dist) * overlap * 1.5;
+                    this.player.group.position.x += pushX;
+                    this.player.group.position.z += pushZ;
+                }
+
+                // Reverse speed dramatically
+                this.player.speed *= -0.8;
             }
         }
     }
