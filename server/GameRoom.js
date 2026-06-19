@@ -112,7 +112,9 @@ class GameRoom {
             damage: damage,
             killed: killed,
             killer: attacker,
-            victim: target
+            victim: target,
+            attackerX: attacker.x,
+            attackerY: attacker.y
         };
     }
 

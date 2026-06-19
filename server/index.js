@@ -67,7 +67,10 @@ io.on('connection', (socket) => {
 
         // Notify the target that they took damage
         io.to(data.targetId).emit('playerHit', {
-            damage: result.damage
+            damage: result.damage,
+            force: data.force,
+            attackerX: result.attackerX,
+            attackerY: result.attackerY
         });
 
         // --- If the target was killed ---

@@ -442,6 +442,22 @@ export class Game {
 
                 // Spark effect at player position
                 this.particles.spawnCollision(this.player.getPosition(), 0.5);
+
+                // Apply physical bounce if attacker coordinates are provided
+                if (data.attackerX !== undefined && data.attackerY !== undefined) {
+                    const sx = data.attackerX / 10;
+                    const sz = data.attackerY / 10;
+                    
+                    const dx = this.player.group.position.x - sx;
+                    const dz = this.player.group.position.z - sz;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist > 0.001) {
+                        const bounceStrength = Math.max(30, (data.force || 20) * 1.5);
+                        this.player.bounce.x = (dx / dist) * bounceStrength;
+                        this.player.bounce.z = (dz / dist) * bounceStrength;
+                    }
+                }
             }
         });
 
