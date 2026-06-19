@@ -147,25 +147,28 @@ export class World {
             trunk.castShadow = true;
             tree.add(trunk);
 
-            const foliageColor = new THREE.Color().setHSL(0.28 + Math.random() * 0.08, 0.55 + Math.random() * 0.2, 0.25 + Math.random() * 0.15);
-            const foliageMat = new THREE.MeshStandardMaterial({ color: foliageColor, roughness: 0.85 });
-            const foliageBase = treeHeight * 0.75;
-            const foliageR = 1.2 + Math.random() * 1.0;
+            const foliageColor = new THREE.Color().setHSL(0.3 + Math.random() * 0.05, 0.6 + Math.random() * 0.2, 0.2 + Math.random() * 0.1);
+            const foliageMat = new THREE.MeshStandardMaterial({ color: foliageColor, roughness: 0.9 });
+            
+            const layers = 3 + Math.floor(Math.random() * 2);
+            for (let l = 0; l < layers; l++) {
+                const r = 2.0 - (l * 0.4);
+                const h = 3.0;
+                const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), foliageMat);
+                cone.position.set(0, treeHeight * 0.6 + (l * 1.5), 0);
+                
+                // Add some noise to the cone vertices to make the pine tree look organic
+                const pos = cone.geometry.attributes.position;
+                for (let j = 0; j < pos.count; j++) {
+                    if (pos.getY(j) > 0) continue; // Keep the peak sharp
+                    pos.setX(j, pos.getX(j) * (0.85 + Math.random() * 0.3));
+                    pos.setZ(j, pos.getZ(j) * (0.85 + Math.random() * 0.3));
+                }
+                cone.geometry.computeVertexNormals();
 
-            const f1 = new THREE.Mesh(new THREE.SphereGeometry(foliageR, 8, 7), foliageMat);
-            f1.position.set(0, foliageBase + foliageR * 0.3, 0);
-            f1.castShadow = true; tree.add(f1);
-
-            for (let s = 0; s < 3; s++) {
-                const sAngle = (s / 3) * Math.PI * 2 + Math.random() * 0.5;
-                const sR = foliageR * (0.55 + Math.random() * 0.25);
-                const sf = new THREE.Mesh(new THREE.SphereGeometry(sR, 7, 6), foliageMat);
-                sf.position.set(Math.cos(sAngle) * foliageR * 0.5, foliageBase + Math.random() * foliageR * 0.3, Math.sin(sAngle) * foliageR * 0.5);
-                sf.castShadow = true; tree.add(sf);
+                cone.castShadow = true;
+                tree.add(cone);
             }
-            const fTop = new THREE.Mesh(new THREE.SphereGeometry(foliageR * 0.6, 7, 6), foliageMat);
-            fTop.position.set(0, foliageBase + foliageR * 0.9, 0);
-            fTop.castShadow = true; tree.add(fTop);
 
             tree.position.set(x, 0, z);
             this.scene.add(tree);
@@ -424,24 +427,40 @@ export class World {
     // ========================================================================
 
     _createWalls() {
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.7, metalness: 0.3 });
-        const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
-
-        [
-            { w: ARENA_SIZE, d: 1, x: HALF, z: 0 },
-            { w: ARENA_SIZE, d: 1, x: HALF, z: ARENA_SIZE },
-            { w: 1, d: ARENA_SIZE, x: 0, z: HALF },
-            { w: 1, d: ARENA_SIZE, x: ARENA_SIZE, z: HALF }
-        ].forEach(cfg => {
-            const wall = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, WALL_HEIGHT, cfg.d), wallMat);
-            wall.position.set(cfg.x, WALL_HEIGHT / 2, cfg.z);
-            wall.castShadow = true; wall.receiveShadow = true;
-            this.scene.add(wall);
-
-            const edge = new THREE.Mesh(new THREE.BoxGeometry(cfg.w + 0.2, 0.15, cfg.d + 0.2), neonMat);
-            edge.position.set(cfg.x, WALL_HEIGHT + 0.075, cfg.z);
-            this.scene.add(edge);
-        });
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x4a4a45, roughness: 0.95, metalness: 0.05 });
+        
+        // Generate a rugged mountain range enclosing the arena
+        for (let i = 0; i < 200; i++) {
+            const isTopBottom = Math.random() > 0.5;
+            let x, z;
+            if (isTopBottom) {
+                x = -20 + Math.random() * (ARENA_SIZE + 40);
+                z = Math.random() > 0.5 ? -5 - Math.random() * 25 : ARENA_SIZE + 5 + Math.random() * 25;
+            } else {
+                x = Math.random() > 0.5 ? -5 - Math.random() * 25 : ARENA_SIZE + 5 + Math.random() * 25;
+                z = -20 + Math.random() * (ARENA_SIZE + 40);
+            }
+            
+            const radius = 12 + Math.random() * 30;
+            const height = 25 + Math.random() * 50;
+            const geo = new THREE.ConeGeometry(radius, height, 5 + Math.floor(Math.random() * 3));
+            
+            // Randomize vertices for jagged mountains
+            const pos = geo.attributes.position;
+            for (let j = 0; j < pos.count; j++) {
+                if (pos.getY(j) > 0) continue; // Keep the peak intact
+                pos.setX(j, pos.getX(j) * (0.7 + Math.random() * 0.6));
+                pos.setZ(j, pos.getZ(j) * (0.7 + Math.random() * 0.6));
+            }
+            geo.computeVertexNormals();
+            
+            const mountain = new THREE.Mesh(geo, rockMat);
+            mountain.position.set(x, height / 2 - 5, z);
+            mountain.rotation.y = Math.random() * Math.PI;
+            mountain.castShadow = true;
+            mountain.receiveShadow = true;
+            this.scene.add(mountain);
+        }
     }
 
     // ========================================================================
@@ -449,27 +468,35 @@ export class World {
     // ========================================================================
 
     _createObstacles() {
-        const obstacleMat = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.6, metalness: 0.4 });
-        const neonEdgeMat = new THREE.MeshBasicMaterial({ color: 0x9b59b6, transparent: true, opacity: 0.5 });
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x666660, roughness: 0.95, metalness: 0.05 });
 
         for (let i = 0; i < OBSTACLE_COUNT; i++) {
-            const w = 2 + Math.random() * 4;
-            const h = 1.5 + Math.random() * 3;
-            const d = 2 + Math.random() * 4;
+            const radius = 1.5 + Math.random() * 2.5;
             const x = 30 + Math.random() * (ARENA_SIZE - 60);
             const z = 30 + Math.random() * (ARENA_SIZE - 60);
             if (Math.abs(z - HALF) < 15) continue;
 
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), obstacleMat);
-            mesh.position.set(x, h / 2, z);
+            const geo = new THREE.DodecahedronGeometry(radius, 1);
+            // Add noise to make it look like a natural boulder
+            const pos = geo.attributes.position;
+            for (let j = 0; j < pos.count; j++) {
+                pos.setXYZ(
+                    j,
+                    pos.getX(j) * (0.8 + Math.random() * 0.4),
+                    pos.getY(j) * (0.8 + Math.random() * 0.4),
+                    pos.getZ(j) * (0.8 + Math.random() * 0.4)
+                );
+            }
+            geo.computeVertexNormals();
+
+            const mesh = new THREE.Mesh(geo, rockMat);
+            mesh.position.set(x, radius * 0.5, z);
+            mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
             mesh.castShadow = true; mesh.receiveShadow = true;
             this.scene.add(mesh);
 
-            const edge = new THREE.Mesh(new THREE.BoxGeometry(w + 0.1, 0.1, d + 0.1), neonEdgeMat);
-            edge.position.set(x, h + 0.05, z);
-            this.scene.add(edge);
-
-            this.obstacles.push({ mesh, box: new THREE.Box3().setFromObject(mesh), w, d, x, z });
+            // Keep the physical bounding box for collision detection
+            this.obstacles.push({ mesh: null, box: null, w: radius * 1.8, d: radius * 1.8, x, z });
         }
     }
 
