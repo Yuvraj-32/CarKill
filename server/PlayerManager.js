@@ -36,10 +36,21 @@ function getRandomColor() {
  */
 function getRandomSpawnPoint() {
     const MARGIN = 200;
-    return {
-        x: MARGIN + Math.random() * (ARENA_WIDTH  - MARGIN * 2),
-        y: MARGIN + Math.random() * (ARENA_HEIGHT - MARGIN * 2)
-    };
+    let x, y;
+    let inRiver = true;
+    
+    while (inRiver) {
+        x = MARGIN + Math.random() * (ARENA_WIDTH  - MARGIN * 2);
+        y = MARGIN + Math.random() * (ARENA_HEIGHT - MARGIN * 2);
+        
+        // Center of map is Y=1500. River width is roughly 240 units.
+        // Prevent spawning anywhere between Y=1300 and Y=1700
+        if (y < 1300 || y > 1700) {
+            inRiver = false;
+        }
+    }
+    
+    return { x, y };
 }
 
 /**

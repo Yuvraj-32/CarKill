@@ -295,18 +295,38 @@ export class Car {
         });
 
         // ============================================================
-        // MAD MAX WEDGE (COW CATCHER)
+        // MAD MAX WEDGE (COW CATCHER) & GIANT SPIKES
         // ============================================================
         const plowMat = new THREE.MeshStandardMaterial({
             color: 0x222222, metalness: 0.9, roughness: 0.7
         });
-        const plowGeo = new THREE.CylinderGeometry(0.5, 0.5, cfg.bodyW + 0.2, 3);
+        const plowGeo = new THREE.CylinderGeometry(0.8, 0.8, cfg.bodyW + 0.4, 3);
         const plow = new THREE.Mesh(plowGeo, plowMat);
         plow.rotation.z = Math.PI / 2; // horizontal
-        plow.rotation.x = Math.PI / 6; // angle slope down
-        plow.position.set(0, 0.25, frontZ + 0.4);
+        plow.rotation.x = Math.PI / 5; // angle slope down
+        plow.position.set(0, 0.35, frontZ + 0.6);
         plow.castShadow = true;
         group.add(plow);
+
+        // Giant Spikes protruding from the plow
+        const spikeCount = type === 'tank' ? 5 : 3;
+        const spikeSpacing = (cfg.bodyW * 0.8) / (spikeCount - 1);
+        const startX = -cfg.bodyW * 0.4;
+        const spikeLen = 1.4; // Massive spikes
+        const spikeGeo = new THREE.ConeGeometry(0.12, spikeLen, 6);
+        const spikeMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.3 });
+        
+        for (let s = 0; s < spikeCount; s++) {
+            const spike = new THREE.Mesh(spikeGeo, spikeMat);
+            spike.rotation.x = Math.PI / 2;
+            spike.position.set(
+                startX + s * spikeSpacing,
+                0.35,
+                frontZ + 0.6 + spikeLen / 2
+            );
+            spike.castShadow = true;
+            group.add(spike);
+        }
 
         // Rear Bumper (Thick iron bar)
         const rbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.2, 0.3);
