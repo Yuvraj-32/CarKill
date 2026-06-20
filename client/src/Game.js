@@ -209,12 +209,29 @@ export class Game {
         // 5. Particles
         this.particles.update(delta);
 
-        // Dust behind car when moving fast
-        if (!this.isDead && Math.abs(this.player.speed) > 20) {
+        // Dust & Exhaust behind car
+        if (!this.isDead) {
             const rearOffset = new THREE.Vector3(0, 0, -this.player.cfg.bodyL / 2)
                 .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.player.angle);
-            const dustPos = this.player.getPosition().clone().add(rearOffset);
-            this.particles.spawnDust(dustPos, this.player.angle, Math.abs(this.player.speed));
+            const rearPos = this.player.getPosition().clone().add(rearOffset);
+            
+            if (Math.abs(this.player.speed) > 20) {
+                this.particles.spawnDust(rearPos, this.player.angle, Math.abs(this.player.speed));
+            }
+            if (Math.random() < 0.3 + (Math.abs(this.player.speed) / 100)) {
+                this.particles.spawnExhaustSmoke(rearPos, 1.0 + Math.abs(this.player.speed) / 40);
+            }
+        }
+
+        // Exhaust for remote players
+        for (let id in this.opponents) {
+            const op = this.opponents[id];
+            if (!op.isDead && Math.random() < 0.2) {
+                const opRear = new THREE.Vector3(0, 0, -1)
+                    .applyAxisAngle(new THREE.Vector3(0, 1, 0), op.group.rotation.y);
+                const opPos = op.group.position.clone().add(opRear);
+                this.particles.spawnExhaustSmoke(opPos, 1.0);
+            }
         }
 
         // 6. World animation (water flow)

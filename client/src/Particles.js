@@ -79,6 +79,44 @@ export class ParticleSystem {
         this.bursts.push(particles);
     }
 
+    /** Spawn continuous exhaust smoke */
+    spawnExhaustSmoke(position, scale = 1) {
+        const count = 1;
+        const particles = [];
+        
+        for (let i = 0; i < count; i++) {
+            const size = (0.15 + Math.random() * 0.15) * scale;
+            const geo = new THREE.SphereGeometry(size, 4, 4);
+            const gray = Math.floor(30 + Math.random() * 30); // dark gray smoke
+            const mat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(`rgb(${gray}, ${gray}, ${gray})`),
+                transparent: true, opacity: 0.6
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+
+            mesh.position.set(
+                position.x + (Math.random() - 0.5) * 0.1,
+                position.y + (Math.random() - 0.5) * 0.1,
+                position.z + (Math.random() - 0.5) * 0.1
+            );
+
+            // Smoke drifts up and slightly randomly
+            mesh.userData.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 0.5,
+                1.0 + Math.random() * 1.0,
+                (Math.random() - 0.5) * 0.5
+            );
+            mesh.userData.lifetime = 0.6 + Math.random() * 0.4;
+            mesh.userData.age = 0;
+            mesh.userData.isExhaust = true;
+
+            this.scene.add(mesh);
+            particles.push(mesh);
+        }
+        
+        this.bursts.push(particles);
+    }
+
     /** Spawn a massive explosion at a death position */
     spawnExplosion(position) {
         const count = 45;

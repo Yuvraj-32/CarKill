@@ -110,8 +110,9 @@ export class Car {
     _buildModel(type, color, cfg) {
         const group = new THREE.Group();
 
-        const bodyMat = new THREE.MeshStandardMaterial({
-            color, metalness: 0.55, roughness: 0.35
+        const bodyMat = new THREE.MeshPhysicalMaterial({
+            color, metalness: 0.6, roughness: 0.3,
+            clearcoat: 1.0, clearcoatRoughness: 0.15
         });
         const darkMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(color).multiplyScalar(0.6),
@@ -176,6 +177,12 @@ export class Car {
             rw.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ - cfg.cabinL / 2);
             rw.rotation.x = -Math.PI * 0.08;
             group.add(rw);
+
+            // Side windows
+            const swGeo = new THREE.BoxGeometry(cfg.cabinW + 0.02, cfg.cabinH - 0.15, cfg.cabinL - 0.3);
+            const sw = new THREE.Mesh(swGeo, glassMat);
+            sw.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ);
+            group.add(sw);
         }
 
         // ---- Wheels ----
@@ -193,12 +200,21 @@ export class Car {
             [wheelOffX, wheelR, wheelZ2]
         ];
 
+        const rimGeo = new THREE.CylinderGeometry(wheelR * 0.6, wheelR * 0.6, wheelW + 0.04, 12);
+        const rimMat = new THREE.MeshStandardMaterial({
+            color: 0xdddddd, metalness: 0.9, roughness: 0.1
+        });
+
         this.wheels = [];
         wheelPositions.forEach(([wx, wy, wz]) => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
             wheel.position.set(wx, wy, wz);
             wheel.rotation.z = Math.PI / 2;
             wheel.castShadow = true;
+            
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            wheel.add(rim); // rim rotates with wheel
+            
             group.add(wheel);
             this.wheels.push(wheel);
         });
@@ -343,6 +359,23 @@ export class Car {
         // ============================================================
         // VEHICLE-SPECIFIC DETAILS
         // ============================================================
+        if (type === 'car') {
+            // Racing Spoiler
+            const spoilerMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+            const spoilerGeo = new THREE.BoxGeometry(cfg.bodyW * 0.95, 0.05, 0.25);
+            const spoiler = new THREE.Mesh(spoilerGeo, spoilerMat);
+            spoiler.position.set(0, 0.5 + cfg.bodyH + 0.2, rearZ + 0.15);
+            spoiler.castShadow = true;
+            group.add(spoiler);
+            
+            const supGeo = new THREE.BoxGeometry(0.04, 0.2, 0.1);
+            [-cfg.bodyW * 0.3, cfg.bodyW * 0.3].forEach(sx => {
+                const sup = new THREE.Mesh(supGeo, spoilerMat);
+                sup.position.set(sx, 0.5 + cfg.bodyH + 0.1, rearZ + 0.15);
+                group.add(sup);
+            });
+        }
+
         if (type === 'pickup') {
             // Roof-mounted light bar
             const lbGeo = new THREE.BoxGeometry(cfg.cabinW * 0.8, 0.08, 0.15);
