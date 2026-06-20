@@ -85,12 +85,12 @@ export class ParticleSystem {
         const particles = [];
         
         for (let i = 0; i < count; i++) {
-            const size = (0.15 + Math.random() * 0.15) * scale;
+            const size = (0.25 + Math.random() * 0.25) * scale;
             const geo = new THREE.SphereGeometry(size, 4, 4);
-            const gray = Math.floor(30 + Math.random() * 30); // dark gray smoke
+            const gray = Math.floor(10 + Math.random() * 20); // thick black soot
             const mat = new THREE.MeshBasicMaterial({
                 color: new THREE.Color(`rgb(${gray}, ${gray}, ${gray})`),
-                transparent: true, opacity: 0.6
+                transparent: true, opacity: 0.8
             });
             const mesh = new THREE.Mesh(geo, mat);
 

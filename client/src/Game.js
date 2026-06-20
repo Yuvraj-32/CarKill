@@ -218,8 +218,13 @@ export class Game {
             if (Math.abs(this.player.speed) > 20) {
                 this.particles.spawnDust(rearPos, this.player.angle, Math.abs(this.player.speed));
             }
+            
+            // Exhaust smoke from front hood stacks
             if (Math.random() < 0.3 + (Math.abs(this.player.speed) / 100)) {
-                this.particles.spawnExhaustSmoke(rearPos, 1.0 + Math.abs(this.player.speed) / 40);
+                const hoodOffset = new THREE.Vector3(0, 0, this.player.cfg.bodyL * 0.3)
+                    .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.player.angle);
+                const hoodPos = this.player.getPosition().clone().add(hoodOffset);
+                this.particles.spawnExhaustSmoke(hoodPos, 1.0 + Math.abs(this.player.speed) / 40);
             }
         }
 
@@ -227,9 +232,9 @@ export class Game {
         for (let id in this.opponents) {
             const op = this.opponents[id];
             if (!op.isDead && Math.random() < 0.2) {
-                const opRear = new THREE.Vector3(0, 0, -1)
+                const opHood = new THREE.Vector3(0, 0, 1)
                     .applyAxisAngle(new THREE.Vector3(0, 1, 0), op.group.rotation.y);
-                const opPos = op.group.position.clone().add(opRear);
+                const opPos = op.group.position.clone().add(opHood);
                 this.particles.spawnExhaustSmoke(opPos, 1.0);
             }
         }

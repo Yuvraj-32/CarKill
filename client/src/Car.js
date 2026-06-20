@@ -107,16 +107,65 @@ export class Car {
     // 3D Model Builder
     // ========================================================================
 
+    _createRustTexture(baseColorHex) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+
+        // Base color
+        ctx.fillStyle = baseColorHex;
+        ctx.fillRect(0, 0, 256, 256);
+
+        // Rust spots
+        for (let i = 0; i < 2500; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            const size = Math.random() * 12 + 2;
+            
+            const r = 80 + Math.random() * 60;
+            const g = 30 + Math.random() * 30;
+            const b = 10 + Math.random() * 20;
+            const a = Math.random() * 0.8;
+
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Dirt smudges
+        for (let i = 0; i < 30; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            const w = Math.random() * 100 + 50;
+            const h = Math.random() * 100 + 50;
+            
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, w/2);
+            grad.addColorStop(0, `rgba(20, 15, 10, 0.6)`);
+            grad.addColorStop(1, `rgba(20, 15, 10, 0)`);
+            
+            ctx.fillStyle = grad;
+            ctx.fillRect(x - w/2, y - h/2, w, h);
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+
     _buildModel(type, color, cfg) {
         const group = new THREE.Group();
 
-        const bodyMat = new THREE.MeshPhysicalMaterial({
-            color, metalness: 0.6, roughness: 0.3,
-            clearcoat: 1.0, clearcoatRoughness: 0.15
+        const rustTex = this._createRustTexture(color);
+        const darkRustTex = this._createRustTexture('#333333');
+
+        const bodyMat = new THREE.MeshStandardMaterial({
+            map: rustTex, metalness: 0.7, roughness: 0.9
         });
         const darkMat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(color).multiplyScalar(0.6),
-            metalness: 0.4, roughness: 0.5
+            map: darkRustTex, metalness: 0.6, roughness: 0.9
         });
         const glassMat = new THREE.MeshStandardMaterial({
             color: 0x88ccff, transparent: true, opacity: 0.45,
@@ -164,34 +213,43 @@ export class Car {
             cabin.castShadow = true;
             group.add(cabin);
 
-            // Windshield (front, angled)
-            const wsGeo = new THREE.BoxGeometry(cfg.cabinW - 0.15, cfg.cabinH - 0.05, 0.08);
-            const ws = new THREE.Mesh(wsGeo, glassMat);
-            ws.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + cfg.cabinL / 2);
-            ws.rotation.x = Math.PI * 0.12;
-            group.add(ws);
+            // Rebar window cages (Mad Max)
+            const rebarMat = darkMat;
+            const rebarGeo = new THREE.CylinderGeometry(0.03, 0.03, cfg.cabinH + 0.05, 4);
 
-            // Rear window
-            const rwGeo = new THREE.BoxGeometry(cfg.cabinW - 0.2, cfg.cabinH - 0.1, 0.06);
-            const rw = new THREE.Mesh(rwGeo, glassMat);
-            rw.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ - cfg.cabinL / 2);
-            rw.rotation.x = -Math.PI * 0.08;
-            group.add(rw);
+            // Front cage
+            for (let i = -1; i <= 1; i++) {
+                const bar = new THREE.Mesh(rebarGeo, rebarMat);
+                bar.position.set(i * 0.3, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + cfg.cabinL / 2);
+                bar.rotation.x = Math.PI * 0.12;
+                group.add(bar);
+            }
+            // Rear cage
+            for (let i = -1; i <= 1; i++) {
+                const bar = new THREE.Mesh(rebarGeo, rebarMat);
+                bar.position.set(i * 0.3, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ - cfg.cabinL / 2);
+                bar.rotation.x = -Math.PI * 0.08;
+                group.add(bar);
+            }
+            // Side cages
+            for (let i = -1; i <= 1; i++) {
+                const barL = new THREE.Mesh(rebarGeo, rebarMat);
+                barL.position.set(-cfg.cabinW/2, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + i * 0.3);
+                group.add(barL);
 
-            // Side windows
-            const swGeo = new THREE.BoxGeometry(cfg.cabinW + 0.02, cfg.cabinH - 0.15, cfg.cabinL - 0.3);
-            const sw = new THREE.Mesh(swGeo, glassMat);
-            sw.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ);
-            group.add(sw);
+                const barR = new THREE.Mesh(rebarGeo, rebarMat);
+                barR.position.set(cfg.cabinW/2, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + i * 0.3);
+                group.add(barR);
+            }
         }
 
-        // ---- Wheels ----
-        const wheelR = type === 'tank' ? 0.4 : 0.32;
-        const wheelW = type === 'tank' ? 0.35 : 0.2;
-        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 12);
-        const wheelOffX = cfg.bodyW / 2 + wheelW / 2 - 0.05;
-        const wheelZ1 = cfg.bodyL * 0.32;
-        const wheelZ2 = -cfg.bodyL * 0.32;
+        // ---- Monster Wheels ----
+        const wheelR = type === 'tank' ? 0.5 : 0.45;
+        const wheelW = type === 'tank' ? 0.4 : 0.3;
+        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 8); // octagonal
+        const wheelOffX = cfg.bodyW / 2 + wheelW / 2 + 0.05;
+        const wheelZ1 = cfg.bodyL * 0.35;
+        const wheelZ2 = -cfg.bodyL * 0.35;
 
         const wheelPositions = [
             [-wheelOffX, wheelR, wheelZ1],
@@ -200,10 +258,9 @@ export class Car {
             [wheelOffX, wheelR, wheelZ2]
         ];
 
-        const rimGeo = new THREE.CylinderGeometry(wheelR * 0.6, wheelR * 0.6, wheelW + 0.04, 12);
-        const rimMat = new THREE.MeshStandardMaterial({
-            color: 0xdddddd, metalness: 0.9, roughness: 0.1
-        });
+        // Rusty iron hubcaps
+        const rimGeo = new THREE.CylinderGeometry(wheelR * 0.5, wheelR * 0.5, wheelW + 0.04, 6);
+        const rimMat = darkMat;
 
         this.wheels = [];
         wheelPositions.forEach(([wx, wy, wz]) => {
@@ -238,65 +295,23 @@ export class Car {
         });
 
         // ============================================================
-        // FRONT SPIKES / RAM BAR
+        // MAD MAX WEDGE (COW CATCHER)
         // ============================================================
-        const spikeMat = new THREE.MeshStandardMaterial({
-            color: 0xaaaaaa, metalness: 0.85, roughness: 0.15
+        const plowMat = new THREE.MeshStandardMaterial({
+            color: 0x222222, metalness: 0.9, roughness: 0.7
         });
+        const plowGeo = new THREE.CylinderGeometry(0.5, 0.5, cfg.bodyW + 0.2, 3);
+        const plow = new THREE.Mesh(plowGeo, plowMat);
+        plow.rotation.z = Math.PI / 2; // horizontal
+        plow.rotation.x = Math.PI / 6; // angle slope down
+        plow.position.set(0, 0.25, frontZ + 0.4);
+        plow.castShadow = true;
+        group.add(plow);
 
-        // Ram bar — horizontal chrome bar
-        const barGeo = new THREE.CylinderGeometry(0.06, 0.06, cfg.bodyW * 0.85, 8);
-        const ramBar = new THREE.Mesh(barGeo, spikeMat);
-        ramBar.rotation.z = Math.PI / 2;
-        ramBar.position.set(0, 0.45, frontZ + 0.15);
-        ramBar.castShadow = true;
-        group.add(ramBar);
-
-        // Vertical ram bar supports
-        [-cfg.bodyW * 0.3, cfg.bodyW * 0.3].forEach(sx => {
-            const supportGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6);
-            const support = new THREE.Mesh(supportGeo, spikeMat);
-            support.position.set(sx, 0.6, frontZ + 0.1);
-            group.add(support);
-        });
-
-        // Front spikes — metallic cones protruding forward
-        const spikeCount = type === 'tank' ? 5 : 3;
-        const spikeSpacing = (cfg.bodyW * 0.7) / (spikeCount - 1);
-        const startX = -cfg.bodyW * 0.35;
-        const spikeLen = type === 'tank' ? 1.2 : 0.8;
-
-        for (let s = 0; s < spikeCount; s++) {
-            const spikeGeo = new THREE.ConeGeometry(0.07, spikeLen, 6);
-            const spike = new THREE.Mesh(spikeGeo, spikeMat);
-            spike.rotation.x = Math.PI / 2; // point forward (+Z)
-            spike.position.set(
-                startX + s * spikeSpacing,
-                0.45,
-                frontZ + 0.15 + spikeLen / 2
-            );
-            spike.castShadow = true;
-            group.add(spike);
-        }
-
-        // ============================================================
-        // BUMPERS
-        // ============================================================
-        const bumperMat = new THREE.MeshStandardMaterial({
-            color: 0x333333, metalness: 0.5, roughness: 0.4
-        });
-
-        // Front bumper
-        const fbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.15, 0.2);
-        const frontBumper = new THREE.Mesh(fbGeo, bumperMat);
-        frontBumper.position.set(0, 0.35, frontZ + 0.05);
-        frontBumper.castShadow = true;
-        group.add(frontBumper);
-
-        // Rear bumper
-        const rbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.15, 0.2);
-        const rearBumper = new THREE.Mesh(rbGeo, bumperMat);
-        rearBumper.position.set(0, 0.35, rearZ - 0.05);
+        // Rear Bumper (Thick iron bar)
+        const rbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.2, 0.3);
+        const rearBumper = new THREE.Mesh(rbGeo, plowMat);
+        rearBumper.position.set(0, 0.35, rearZ - 0.1);
         rearBumper.castShadow = true;
         group.add(rearBumper);
 
@@ -311,18 +326,18 @@ export class Car {
         });
 
         // ============================================================
-        // EXHAUST PIPES (rear)
+        // DIESEL SMOKESTACKS
         // ============================================================
         const exhaustMat = new THREE.MeshStandardMaterial({
-            color: 0x555555, metalness: 0.7, roughness: 0.3
+            color: 0x333333, metalness: 0.8, roughness: 0.6
         });
         const exCount = type === 'tank' ? 1 : 2;
-        const exPositions = exCount === 1 ? [0] : [-cfg.bodyW * 0.25, cfg.bodyW * 0.25];
+        const exPositions = exCount === 1 ? [0] : [-cfg.bodyW * 0.4, cfg.bodyW * 0.4];
         exPositions.forEach(ex => {
-            const pipeGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.4, 8);
+            const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
             const pipe = new THREE.Mesh(pipeGeo, exhaustMat);
-            pipe.rotation.x = Math.PI / 2;
-            pipe.position.set(ex, 0.25, rearZ - 0.25);
+            pipe.position.set(ex, 0.5 + cfg.bodyH + 0.3, frontZ - 0.2);
+            pipe.castShadow = true;
             group.add(pipe);
         });
 
