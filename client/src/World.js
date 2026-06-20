@@ -369,11 +369,7 @@ export class World {
     // ========================================================================
 
     _createRamps() {
-        const woodTex = this._createWoodTexture();
-        const rampMat = new THREE.MeshStandardMaterial({ 
-            map: woodTex, bumpMap: woodTex, bumpScale: 0.04, 
-            roughness: 0.8, metalness: 0.1 
-        });
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x4a4a45, roughness: 0.95, metalness: 0.05 });
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
 
         const configs = [
@@ -382,31 +378,35 @@ export class World {
             { x: 260, z: 132, rotY: 0 }
         ];
 
-        const rampW = 8, totalH = 4.0, totalD = 12;
-        const stepCount = 10;
-        const stepH = totalH / stepCount;
-        const stepD = totalD / stepCount;
+        const rampW = 10, totalH = 4.0, totalD = 12; // made slightly wider
 
         configs.forEach(cfg => {
             const group = new THREE.Group();
 
-            // Build stepped ramp
-            for (let s = 0; s < stepCount; s++) {
-                const h = stepH * (s + 1);
-                const geo = new THREE.BoxGeometry(rampW, h, stepD);
-                const step = new THREE.Mesh(geo, rampMat);
-                step.position.set(0, h / 2, (s - stepCount / 2 + 0.5) * stepD);
-                step.castShadow = true;
-                step.receiveShadow = true;
-                group.add(step);
+            // Build Mountain Slope (Wedge)
+            const geo = new THREE.BoxGeometry(rampW, totalH, totalD);
+            const pos = geo.attributes.position;
+            
+            // Pinch the top-back edge down to form a slope
+            for (let i = 0; i < pos.count; i++) {
+                if (pos.getY(i) > 0 && pos.getZ(i) < 0) {
+                    pos.setY(i, -totalH / 2);
+                }
             }
+            geo.computeVertexNormals();
 
-            // Caution stripe on top edge
+            const slope = new THREE.Mesh(geo, rockMat);
+            slope.position.set(0, totalH / 2, 0);
+            slope.castShadow = true;
+            slope.receiveShadow = true;
+            group.add(slope);
+
+            // Caution stripe on top edge (front)
             const stripe = new THREE.Mesh(
                 new THREE.BoxGeometry(rampW + 0.1, 0.08, 0.4),
                 stripeMat
             );
-            stripe.position.set(0, totalH + 0.04, (stepCount / 2 - 0.5) * stepD);
+            stripe.position.set(0, totalH + 0.04, totalD / 2 - 0.2);
             group.add(stripe);
 
             group.rotation.y = cfg.rotY;
