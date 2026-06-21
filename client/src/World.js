@@ -358,22 +358,22 @@ export class World {
         // ---- Theme config ----
         const themes = {
             wasteland: {
-                deepColor: 0x4a3010, shallowColor: 0x7a5828,
-                foamColor: 'rgba(180,140,60,0.4)', flowColor: 'rgba(200,160,80,0.12)',
+                deepColor: 0x6a4010, shallowColor: 0x9a6828,
+                foamColor: 'rgba(255,200,80,0.6)', flowColor: 'rgba(255,180,80,0.25)',
                 bedColor: 0x2a1a08, bankColor: 0x5a3a1a,
-                emissive: null, lightColor: null, fogBand: 0x8a6530
+                emissive: new THREE.Color(0x331100), lightColor: 0xffaa44
             },
             toxic: {
-                deepColor: 0x002200, shallowColor: 0x004400,
-                foamColor: 'rgba(0,255,80,0.35)', flowColor: 'rgba(0,200,60,0.15)',
+                deepColor: 0x003300, shallowColor: 0x008822,
+                foamColor: 'rgba(50,255,100,0.6)', flowColor: 'rgba(20,255,80,0.3)',
                 bedColor: 0x001500, bankColor: 0x1a3010,
-                emissive: new THREE.Color(0x003300), lightColor: 0x00ff44, fogBand: 0x004400
+                emissive: new THREE.Color(0x00ff44), lightColor: 0x00ff44
             },
             storm: {
-                deepColor: 0x050505, shallowColor: 0x101010,
-                foamColor: 'rgba(80,80,80,0.3)', flowColor: 'rgba(60,60,60,0.1)',
+                deepColor: 0x111111, shallowColor: 0x333333,
+                foamColor: 'rgba(150,150,150,0.5)', flowColor: 'rgba(100,100,100,0.2)',
                 bedColor: 0x030303, bankColor: 0x1a1a1a,
-                emissive: null, lightColor: null, fogBand: 0x050505
+                emissive: new THREE.Color(0x111111), lightColor: 0x888888
             }
         };
         const tc = themes[this.themeName] || themes.wasteland;
@@ -405,14 +405,14 @@ export class World {
 
         const mainWaterMat = new THREE.MeshStandardMaterial({
             color: tc.deepColor,
-            transparent: true, opacity: 0.93,
+            transparent: true, opacity: 0.95,
             roughness: 0.02, metalness: 0.88,
             bumpMap: this._mainWaterTex,
-            bumpScale: 0.12
+            bumpScale: 0.15
         });
         if (tc.emissive) {
             mainWaterMat.emissive = tc.emissive;
-            mainWaterMat.emissiveIntensity = 0.5;
+            mainWaterMat.emissiveIntensity = this.themeName === 'toxic' ? 0.8 : 0.4;
         }
         const mainWater = new THREE.Mesh(mainWaterGeo, mainWaterMat);
         mainWater.rotation.x = -Math.PI / 2;
@@ -429,7 +429,7 @@ export class World {
 
         const shimmerMat = new THREE.MeshBasicMaterial({
             color: tc.shallowColor,
-            transparent: true, opacity: 0.18,
+            transparent: true, opacity: 0.35,
             map: this._shimmerTex,
             blending: THREE.AdditiveBlending, depthWrite: false
         });
@@ -465,24 +465,26 @@ export class World {
         // ---- Bank edges ----
         const bankMat = new THREE.MeshStandardMaterial({ color: tc.bankColor, roughness: 0.9 });
         [-1, 1].forEach(side => {
-            // Sloped bank using a wedge shape
-            const bankGeo = new THREE.BoxGeometry(ARENA_SIZE - 4, 1.6, 2.5); // Taller to cover gap
+            // Sloped bank connecting ground to river bed
+            const bankGeo = new THREE.PlaneGeometry(ARENA_SIZE, 3.0);
             const bank = new THREE.Mesh(bankGeo, bankMat);
-            bank.position.set(HALF, -0.8, riverZ + side * (hw + 0.8)); // Positioned so top is at y=0
+            // Angle the plane downwards towards the river
+            bank.rotation.x = -Math.PI / 2 + (side * 0.5); 
+            bank.position.set(HALF, -0.4, riverZ + side * (hw - 0.2)); 
             bank.castShadow = true;
             bank.receiveShadow = true;
             this._add(bank);
 
-            // Wet sand strip right at water's edge
+            // Wet sand strip right at water's edge, tilted to match the bank
             const wetMat = new THREE.MeshStandardMaterial({
                 color: new THREE.Color(tc.bankColor).multiplyScalar(0.6), roughness: 0.5, metalness: 0.1
             });
             const wetStrip = new THREE.Mesh(
-                new THREE.PlaneGeometry(ARENA_SIZE - 4, 1.2),
+                new THREE.PlaneGeometry(ARENA_SIZE, 1.2),
                 wetMat
             );
-            wetStrip.rotation.x = -Math.PI / 2;
-            wetStrip.position.set(HALF, -0.65, riverZ + side * (hw + 0.1));
+            wetStrip.rotation.x = -Math.PI / 2 + (side * 0.5);
+            wetStrip.position.set(HALF, -0.65, riverZ + side * (hw - 0.7));
             this._add(wetStrip);
         });
 
