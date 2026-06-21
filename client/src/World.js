@@ -585,58 +585,119 @@ export class World {
         ];
         const riverZ = HALF;
         const bridgeLen = 30;
+        const rng = this.rng;
 
-        // Realistic procedural wood texture
+        // Materials
         const woodTex = this._createWoodTexture();
-        const darkWood = 0x5C4033;
+        const darkWood = 0x3d2817;
+        const metalMat = new THREE.MeshStandardMaterial({ 
+            color: 0x333333, roughness: 0.7, metalness: 0.8 
+        });
+        const deckMat = new THREE.MeshStandardMaterial({ 
+            map: woodTex, bumpMap: woodTex, bumpScale: 0.08, 
+            roughness: 0.9, metalness: 0.05 
+        });
 
         bridgeConfigs.forEach(cfg => {
             const group = new THREE.Group();
-
-            // Main deck — thick wooden planks
-            const deckMat = new THREE.MeshStandardMaterial({ 
-                map: woodTex, bumpMap: woodTex, bumpScale: 0.05, 
-                roughness: 0.85, metalness: 0.05 
-            });
-
-            // Individual planks across the bridge
             const plankW = cfg.w - 0.6;
+
+            // 1. Planks (uneven for rugged look)
             for (let p = -bridgeLen / 2; p < bridgeLen / 2; p += 0.8) {
                 const plank = new THREE.Mesh(
-                    new THREE.BoxGeometry(plankW, 0.12, 0.7),
+                    new THREE.BoxGeometry(plankW, 0.15, 0.75),
                     deckMat
                 );
-                plank.position.set(0, 0.76, p);
+                // Slightly uneven
+                plank.position.set(0, 0.76 + (rng() * 0.04), p);
+                plank.rotation.x = (rng() - 0.5) * 0.06;
+                plank.rotation.z = (rng() - 0.5) * 0.04;
                 plank.castShadow = true;
                 plank.receiveShadow = true;
                 group.add(plank);
             }
 
-            // Support beams underneath (2 long beams)
+            // 2. Thick Support Beams (underneath)
             [-1, 1].forEach(side => {
                 const beam = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.5, 0.4, bridgeLen),
+                    new THREE.BoxGeometry(0.6, 0.5, bridgeLen),
                     new THREE.MeshStandardMaterial({ color: darkWood, roughness: 0.9 })
                 );
-                beam.position.set(side * (plankW / 2 - 0.5), 0.5, 0);
+                beam.position.set(side * (plankW / 2 - 0.8), 0.45, 0);
                 beam.castShadow = true;
                 group.add(beam);
             });
 
-            // Support pillars in water (thick logs)
+            // 3. Thick Concrete/Metal Pillars into the river bed
             [-1, 0, 1].forEach(pIdx => {
                 [-1, 1].forEach(side => {
-                    const pillar = new THREE.Mesh(
-                        new THREE.CylinderGeometry(0.25, 0.3, 2.2, 8),
-                        new THREE.MeshStandardMaterial({ color: darkWood, roughness: 0.9 })
-                    );
-                    pillar.position.set(side * (plankW / 2 - 1), -0.3, pIdx * 4);
+                    // Pillars go from y=0.5 down to riverbed (y=-2.0 relative to group)
+                    const pillarGeo = new THREE.CylinderGeometry(0.5, 0.6, 4, 8);
+                    const pillar = new THREE.Mesh(pillarGeo, metalMat);
+                    pillar.position.set(side * (plankW / 2 - 0.4), -1.0, pIdx * 8);
                     pillar.castShadow = true;
                     group.add(pillar);
                 });
             });
 
-            group.position.set(cfg.x, -0.80, riverZ);
+            // 4. Side Railings (Metal Pipes + Diagonal Trusses)
+            [-1, 1].forEach(side => {
+                const railX = side * (plankW / 2 + 0.1);
+                
+                // Top rail pipe
+                const topRail = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.15, 0.15, bridgeLen, 8),
+                    metalMat
+                );
+                topRail.rotation.x = Math.PI / 2;
+                topRail.position.set(railX, 1.4, 0);
+                topRail.castShadow = true;
+                group.add(topRail);
+
+                // Bottom rail pipe
+                const botRail = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.1, bridgeLen, 8),
+                    metalMat
+                );
+                botRail.rotation.x = Math.PI / 2;
+                botRail.position.set(railX, 0.9, 0);
+                botRail.castShadow = true;
+                group.add(botRail);
+
+                // Vertical posts
+                for (let p = -bridgeLen / 2; p <= bridgeLen / 2; p += 3) {
+                    const post = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.2, 1.0, 0.2),
+                        metalMat
+                    );
+                    post.position.set(railX, 1.0, p);
+                    post.castShadow = true;
+                    group.add(post);
+                }
+
+                // Diagonal Truss X-crosses
+                for (let p = -bridgeLen / 2 + 1.5; p < bridgeLen / 2; p += 3) {
+                    const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
+                    cross1.rotation.x = Math.PI / 4;
+                    cross1.position.set(railX, 1.15, p);
+                    group.add(cross1);
+
+                    const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
+                    cross2.rotation.x = -Math.PI / 4;
+                    cross2.position.set(railX, 1.15, p);
+                    group.add(cross2);
+                }
+
+                // Add collision boxes for railings so cars don't fall off easily
+                this.obstacles.push({
+                    mesh: null, box: null,
+                    w: 0.5, d: bridgeLen,
+                    x: cfg.x + railX, z: riverZ
+                });
+            });
+
+            // Adjust group so planks are exactly flush with y=0 ground
+            group.position.set(cfg.x, -0.76, riverZ);
             this.scene.add(group);
         });
     }
