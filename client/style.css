@@ -221,9 +221,107 @@ body {
 }
 
 /* ---- Kill Feed ---- */
+/* ---- Match Timer ---- */
+#match-timer {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 28px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px rgba(255,255,255,0.5), 0 2px 8px rgba(0,0,0,0.9);
+  background: rgba(0,0,0,0.45);
+  padding: 4px 18px;
+  border-radius: 8px;
+  z-index: 50;
+  font-family: 'Inter', monospace;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ---- Theme Label ---- */
+#theme-label {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffee88;
+  letter-spacing: 3px;
+  text-shadow: 0 0 30px rgba(255,220,0,0.8);
+  opacity: 0;
+  transition: opacity 1s ease;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ---- Winner Banner ---- */
+#winner-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  background: linear-gradient(135deg, rgba(10,10,10,0.97), rgba(40,30,0,0.97));
+  border: 2px solid #ffd700;
+  border-radius: 20px;
+  padding: 40px 60px;
+  text-align: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  box-shadow: 0 0 80px rgba(255,215,0,0.4), 0 0 200px rgba(255,215,0,0.15);
+}
+#winner-banner.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: all;
+}
+#winner-crown {
+  font-size: 64px;
+  animation: bounce 0.6s infinite alternate;
+}
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-10px); }
+}
+#winner-title {
+  font-size: 14px;
+  letter-spacing: 6px;
+  color: #ffd700;
+  margin: 8px 0 4px;
+  text-transform: uppercase;
+}
+#winner-name {
+  font-size: 42px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 0 40px rgba(255,215,0,0.9);
+  margin: 8px 0;
+}
+#winner-kills {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ff8844;
+  letter-spacing: 3px;
+  margin-bottom: 16px;
+}
+#winner-subtitle {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 2px;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
 #kill-feed {
   position: absolute;
-  top: 15px;
+  top: 70px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;

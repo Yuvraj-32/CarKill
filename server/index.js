@@ -46,6 +46,10 @@ io.on('connection', (socket) => {
         // Send the full game state only to the joining player
         socket.emit('currentPlayers', room.getGameState());
 
+        // Send map config and current match timer to joining player
+        socket.emit('mapConfig', room.getMapConfig());
+        socket.emit('matchTimer', { timeLeft: room.matchTimeLeft, state: room.matchState });
+
         // Broadcast updated leaderboard
         io.emit('leaderboard', room.getLeaderboard());
     });
@@ -179,6 +183,41 @@ io.on('connection', (socket) => {
 setInterval(() => {
     io.emit('gameState', room.getGameState());
 }, 50);
+
+// ============================================================
+// Match timer loop — runs every 1 second
+// ============================================================
+setInterval(() => {
+    if (room.matchState !== 'playing') return;
+
+    room.matchTimeLeft = Math.max(0, room.matchTimeLeft - 1);
+    io.emit('matchTimer', { timeLeft: room.matchTimeLeft, state: room.matchState });
+
+    if (room.matchTimeLeft <= 0) {
+        // Round over — find winner and enter celebration phase
+        room.matchState = 'celebrating';
+        const winner = room.getWinner();
+
+        io.emit('matchEnd', {
+            winnerId:   winner ? winner.id   : null,
+            winnerName: winner ? winner.name : 'No one',
+            kills:      winner ? winner.kills : 0
+        });
+
+        console.log(`[Match] Round over! Winner: ${winner ? winner.name : 'No one'} with ${winner ? winner.kills : 0} kills`);
+
+        // After 10 seconds of celebration, start a new round
+        setTimeout(() => {
+            room.startNewRound();
+            io.emit('matchStart', room.getMapConfig());
+            // Respawn all players with the fresh round state
+            const newState = room.getGameState();
+            io.emit('roundReset', newState);
+            io.emit('leaderboard', room.getLeaderboard());
+            console.log(`[Match] New round started! Theme: ${room.mapTheme}, Seed: ${room.mapSeed}`);
+        }, 10000);
+    }
+}, 1000);
 
 // ============================================================
 // Start listening

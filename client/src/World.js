@@ -1,6 +1,6 @@
 // ============================================================================
 // World.js — 3D Arena: ground, sky, walls, obstacles, trees, sand, pits,
-//            river (sky-blue), wooden bridges, ramps
+//            river, wooden bridges, ramps. Supports 3 themed environments.
 // Arena: 300×300 units (maps to server's 3000×3000 ÷ 10)
 // ============================================================================
 import * as THREE from 'three';
@@ -13,13 +13,58 @@ const OBSTACLE_COUNT = 14;
 const TREE_COUNT = 30;
 const PIT_COUNT = 5;
 
+// Seeded pseudo-random number generator (Mulberry32)
+// Returns a function that generates deterministic floats [0,1) from a seed.
+function createSeededRng(seed) {
+    let s = seed >>> 0;
+    return function() {
+        s += 0x6D2B79F5;
+        let t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// Theme definitions
+const THEMES = {
+    wasteland: {
+        groundColor: '#5c4a2a', groundNoise: '#7a6035',
+        skyTurbidity: 15, skyRayleigh: 0.5, skyElevation: 8, skyAzimuth: 210,
+        fogColor: 0xd4874a, fogDensity: 0.006,
+        ambientColor: 0xffddaa, sunColor: 0xff8833,
+        riverColor: '#8a7040', riverEmissive: 0x0,
+        groundLabel: 'wasteland'
+    },
+    toxic: {
+        groundColor: '#2a3d1e', groundNoise: '#3a5228',
+        skyTurbidity: 20, skyRayleigh: 1.0, skyElevation: 15, skyAzimuth: 90,
+        fogColor: 0x4a6a2a, fogDensity: 0.007,
+        ambientColor: 0xaaffaa, sunColor: 0x88cc44,
+        riverColor: '#1a4a00', riverEmissive: 0x00ff44,
+        groundLabel: 'toxic'
+    },
+    storm: {
+        groundColor: '#2a2a2a', groundNoise: '#3d3d3d',
+        skyTurbidity: 20, skyRayleigh: 0.2, skyElevation: 5, skyAzimuth: 270,
+        fogColor: 0x3a3a4a, fogDensity: 0.01,
+        ambientColor: 0x8888aa, sunColor: 0x5555aa,
+        riverColor: '#0a0a0a', riverEmissive: 0x0,
+        groundLabel: 'storm'
+    }
+};
+
 export class World {
-    constructor(scene) {
+    constructor(scene, theme = 'wasteland', seed = 12345) {
         this.scene = scene;
+        this.theme = THEMES[theme] || THEMES.wasteland;
+        this.themeName = theme;
+        this.rng = createSeededRng(seed);
         this.obstacles = [];
         this.pits = [];
         this.rivers = [];
         this.ramps = [];
+        this._meshes = []; // track all added meshes for cleanup
 
         this._createGround();
         this._createSandPatches();
@@ -35,50 +80,103 @@ export class World {
         this._setupFog();
     }
 
+    /** Tear down all world objects so a new world can be built */
+    destroy() {
+        // Remove all tracked objects from scene
+        this._meshes.forEach(obj => {
+            this.scene.remove(obj);
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) {
+                if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                else obj.material.dispose();
+            }
+        });
+        this._meshes = [];
+        this.obstacles = [];
+        this.pits = [];
+        this.rivers = [];
+        this.ramps = [];
+        // Remove sky
+        if (this.sky) this.scene.remove(this.sky);
+        // Remove lights
+        if (this._lights) this._lights.forEach(l => this.scene.remove(l));
+        // Remove fog
+        this.scene.fog = null;
+    }
+
+    /** Helper — add object to scene and track it */
+    _add(obj) {
+        this.scene.add(obj);
+        this._meshes.push(obj);
+        return obj;
+    }
+
     // ========================================================================
     // Ground
     // ========================================================================
 
     _createGround() {
-        const texture = this._createAsphaltTexture();
+        const texture = this._createGroundTexture();
         const geo = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
         const mat = new THREE.MeshStandardMaterial({
-            map: texture,
-            bumpMap: texture, bumpScale: 0.15,
-            roughness: 0.95, metalness: 0.05
+            map: texture, bumpMap: texture, bumpScale: 0.15, roughness: 0.95, metalness: 0.05
         });
         const ground = new THREE.Mesh(geo, mat);
         ground.rotation.x = -Math.PI / 2;
         ground.position.set(HALF, 0, HALF);
         ground.receiveShadow = true;
-        this.scene.add(ground);
-
-        const grid = new THREE.GridHelper(ARENA_SIZE, 60, 0x333355, 0x222244);
-        grid.position.set(HALF, 0.01, HALF);
-        grid.material.opacity = 0.2;
-        grid.material.transparent = true;
-        this.scene.add(grid);
+        this._add(ground);
     }
 
-    _createAsphaltTexture() {
+    _createGroundTexture() {
+        const rng = this.rng;
+        const t = this.theme;
         const canvas = document.createElement('canvas');
         canvas.width = 512; canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#2a2a35';
+        ctx.fillStyle = t.groundColor;
         ctx.fillRect(0, 0, 512, 512);
-        for (let i = 0; i < 6000; i++) {
-            const x = Math.random() * 512, y = Math.random() * 512;
-            const g = Math.floor(Math.random() * 25) + 35;
-            ctx.fillStyle = `rgb(${g}, ${g}, ${g + 5})`;
-            ctx.fillRect(x, y, 1 + Math.random(), 1 + Math.random());
+
+        // Noise / cracks
+        for (let i = 0; i < 8000; i++) {
+            const x = rng() * 512, y = rng() * 512;
+            const g = Math.floor(rng() * 20);
+            ctx.fillStyle = t.groundNoise;
+            ctx.globalAlpha = 0.3 + rng() * 0.4;
+            ctx.fillRect(x, y, 1 + rng(), 1 + rng());
         }
-        ctx.strokeStyle = 'rgba(60, 60, 70, 0.3)'; ctx.lineWidth = 1;
-        for (let i = 0; i < 15; i++) {
-            ctx.beginPath();
-            ctx.moveTo(Math.random() * 512, Math.random() * 512);
-            ctx.lineTo(Math.random() * 512, Math.random() * 512);
-            ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Theme-specific surface detail
+        if (this.themeName === 'wasteland') {
+            // Cracked desert lines
+            ctx.strokeStyle = 'rgba(30,20,5,0.5)'; ctx.lineWidth = 1;
+            for (let i = 0; i < 40; i++) {
+                ctx.beginPath();
+                ctx.moveTo(rng() * 512, rng() * 512);
+                ctx.lineTo(rng() * 512, rng() * 512);
+                ctx.stroke();
+            }
+        } else if (this.themeName === 'toxic') {
+            // Green puddles
+            for (let i = 0; i < 20; i++) {
+                const x = rng() * 512, y = rng() * 512;
+                const r = 5 + rng() * 20;
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+                grad.addColorStop(0, 'rgba(50,180,0,0.4)');
+                grad.addColorStop(1, 'rgba(50,180,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            }
+        } else if (this.themeName === 'storm') {
+            // Ash streaks
+            ctx.strokeStyle = 'rgba(80,80,100,0.3)'; ctx.lineWidth = 2;
+            for (let i = 0; i < 30; i++) {
+                const sx = rng() * 512;
+                ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx + (rng()-0.5)*40, 512); ctx.stroke();
+            }
         }
+
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
         texture.repeat.set(30, 30);
@@ -90,30 +188,31 @@ export class World {
     // ========================================================================
 
     _createSandPatches() {
+        const rng = this.rng;
         for (let i = 0; i < 10; i++) {
-            const radius = 8 + Math.random() * 18;
-            const x = 25 + Math.random() * (ARENA_SIZE - 50);
-            const z = 25 + Math.random() * (ARENA_SIZE - 50);
+            const radius = 8 + rng() * 18;
+            const x = 25 + rng() * (ARENA_SIZE - 50);
+            const z = 25 + rng() * (ARENA_SIZE - 50);
             if (Math.abs(z - HALF) < 18) continue;
 
             const sandGeo = new THREE.CircleGeometry(radius, 32);
-            const sandColor = new THREE.Color().setHSL(0.08 + Math.random() * 0.04, 0.35 + Math.random() * 0.15, 0.45 + Math.random() * 0.1);
+            const sandColor = new THREE.Color().setHSL(0.08 + rng() * 0.04, 0.35 + rng() * 0.15, 0.35 + rng() * 0.1);
             const sand = new THREE.Mesh(sandGeo, new THREE.MeshStandardMaterial({ color: sandColor, roughness: 0.95 }));
             sand.rotation.x = -Math.PI / 2;
             sand.position.set(x, 0.015, z);
             sand.receiveShadow = true;
-            this.scene.add(sand);
+            this._add(sand);
 
-            const rockMat = new THREE.MeshStandardMaterial({ color: 0x888877, roughness: 0.9, metalness: 0.1 });
-            for (let r = 0; r < Math.floor(3 + Math.random() * 5); r++) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * radius * 0.8;
-                const rSize = 0.15 + Math.random() * 0.35;
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0x666655, roughness: 0.9, metalness: 0.1 });
+            for (let r = 0; r < Math.floor(3 + rng() * 5); r++) {
+                const angle = rng() * Math.PI * 2;
+                const dist = rng() * radius * 0.8;
+                const rSize = 0.15 + rng() * 0.35;
                 const rock = new THREE.Mesh(new THREE.SphereGeometry(rSize, 5, 4), rockMat);
                 rock.position.set(x + Math.cos(angle) * dist, rSize * 0.4, z + Math.sin(angle) * dist);
-                rock.scale.set(1, 0.5 + Math.random() * 0.3, 1);
+                rock.scale.set(1, 0.5 + rng() * 0.3, 1);
                 rock.castShadow = true;
-                this.scene.add(rock);
+                this._add(rock);
             }
         }
     }
@@ -123,9 +222,12 @@ export class World {
     // ========================================================================
 
     _createTrees() {
+        const rng = this.rng;
+        const isDead = (this.themeName === 'wasteland' || this.themeName === 'storm');
+
         for (let i = 0; i < TREE_COUNT; i++) {
-            const x = 15 + Math.random() * (ARENA_SIZE - 30);
-            const z = 15 + Math.random() * (ARENA_SIZE - 30);
+            const x = 15 + rng() * (ARENA_SIZE - 30);
+            const z = 15 + rng() * (ARENA_SIZE - 30);
             if (Math.abs(z - HALF) < 18) continue;
 
             let tooClose = false;
@@ -136,42 +238,59 @@ export class World {
             if (tooClose) continue;
 
             const tree = new THREE.Group();
-            const treeHeight = 3 + Math.random() * 3;
-            const trunkRadius = 0.25 + Math.random() * 0.15;
+            const treeHeight = 3 + rng() * 3;
+            const trunkRadius = 0.25 + rng() * 0.15;
+            // Dead/dry trunk color
+            const trunkHue = isDead ? 0.06 : 0.07;
+            const trunkLightness = isDead ? 0.15 + rng() * 0.08 : 0.2 + rng() * 0.1;
 
             const trunk = new THREE.Mesh(
                 new THREE.CylinderGeometry(trunkRadius * 0.7, trunkRadius, treeHeight, 8),
-                new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.07, 0.5, 0.2 + Math.random() * 0.1), roughness: 0.95 })
+                new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(trunkHue, 0.3, trunkLightness), roughness: 0.98 })
             );
             trunk.position.y = treeHeight / 2;
             trunk.castShadow = true;
             tree.add(trunk);
 
-            const foliageColor = new THREE.Color().setHSL(0.3 + Math.random() * 0.05, 0.6 + Math.random() * 0.2, 0.2 + Math.random() * 0.1);
-            const foliageMat = new THREE.MeshStandardMaterial({ color: foliageColor, roughness: 0.9 });
-            
-            const layers = 3 + Math.floor(Math.random() * 2);
-            for (let l = 0; l < layers; l++) {
-                const r = 2.0 - (l * 0.4);
-                const h = 3.0;
-                const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), foliageMat);
-                cone.position.set(0, treeHeight * 0.6 + (l * 1.5), 0);
-                
-                // Add some noise to the cone vertices to make the pine tree look organic
-                const pos = cone.geometry.attributes.position;
-                for (let j = 0; j < pos.count; j++) {
-                    if (pos.getY(j) > 0) continue; // Keep the peak sharp
-                    pos.setX(j, pos.getX(j) * (0.85 + Math.random() * 0.3));
-                    pos.setZ(j, pos.getZ(j) * (0.85 + Math.random() * 0.3));
+            if (isDead) {
+                // Dead tree: sparse, bare branches
+                const branchMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.98 });
+                for (let b = 0; b < 4 + Math.floor(rng() * 4); b++) {
+                    const bLen = 0.8 + rng() * 1.5;
+                    const bGeo = new THREE.CylinderGeometry(0.04, 0.04, bLen, 4);
+                    const branch = new THREE.Mesh(bGeo, branchMat);
+                    branch.rotation.z = (rng() - 0.5) * Math.PI * 0.8;
+                    branch.rotation.y = rng() * Math.PI * 2;
+                    branch.position.set(0, treeHeight * (0.4 + rng() * 0.5), 0);
+                    tree.add(branch);
                 }
-                cone.geometry.computeVertexNormals();
-
-                cone.castShadow = true;
-                tree.add(cone);
+            } else {
+                // Living pine tree with foliage
+                const foliageH = this.themeName === 'toxic' ? 0.28 : (0.3 + rng() * 0.05);
+                const foliageS = this.themeName === 'toxic' ? 0.9 : (0.5 + rng() * 0.2);
+                const foliageL = this.themeName === 'toxic' ? 0.18 : (0.2 + rng() * 0.1);
+                const foliageMat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(foliageH, foliageS, foliageL), roughness: 0.9
+                });
+                const layers = 3 + Math.floor(rng() * 2);
+                for (let l = 0; l < layers; l++) {
+                    const r = 2.0 - (l * 0.4);
+                    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, 3.0, 7), foliageMat);
+                    cone.position.set(0, treeHeight * 0.6 + (l * 1.5), 0);
+                    const pos = cone.geometry.attributes.position;
+                    for (let j = 0; j < pos.count; j++) {
+                        if (pos.getY(j) > 0) continue;
+                        pos.setX(j, pos.getX(j) * (0.85 + rng() * 0.3));
+                        pos.setZ(j, pos.getZ(j) * (0.85 + rng() * 0.3));
+                    }
+                    cone.geometry.computeVertexNormals();
+                    cone.castShadow = true;
+                    tree.add(cone);
+                }
             }
 
             tree.position.set(x, 0, z);
-            this.scene.add(tree);
+            this._add(tree);
             this.obstacles.push({ mesh: trunk, box: null, w: trunkRadius * 3, d: trunkRadius * 3, x, z });
         }
     }
@@ -181,10 +300,11 @@ export class World {
     // ========================================================================
 
     _createPits() {
+        const rng = this.rng;
         for (let i = 0; i < PIT_COUNT; i++) {
-            const x = 35 + Math.random() * (ARENA_SIZE - 70);
-            const z = 35 + Math.random() * (ARENA_SIZE - 70);
-            const radius = 3 + Math.random() * 2.5;
+            const x = 35 + rng() * (ARENA_SIZE - 70);
+            const z = 35 + rng() * (ARENA_SIZE - 70);
+            const radius = 3 + rng() * 2.5;
             if (Math.abs(z - HALF) < 20) continue;
 
             let tooClose = false;
@@ -194,19 +314,21 @@ export class World {
             }
             if (tooClose) continue;
 
-            this.scene.add(new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.8, 3, 24), new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 1.0 })).translateX(x).translateY(-1.5).translateZ(z));
+            const pit = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.8, 3, 24), new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 1.0 }));
+            pit.translateX(x).translateY(-1.5).translateZ(z);
+            this._add(pit);
 
             const hole = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), new THREE.MeshBasicMaterial({ color: 0x0a0a0a }));
-            hole.rotation.x = -Math.PI / 2; hole.position.set(x, 0.02, z); this.scene.add(hole);
+            hole.rotation.x = -Math.PI / 2; hole.position.set(x, 0.02, z); this._add(hole);
 
             const ring = new THREE.Mesh(new THREE.RingGeometry(radius - 0.15, radius + 0.4, 32), new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
-            ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.03, z); this.scene.add(ring);
+            ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.03, z); this._add(ring);
 
             const outerRing = new THREE.Mesh(new THREE.RingGeometry(radius + 0.4, radius + 0.8, 32), new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
-            outerRing.rotation.x = -Math.PI / 2; outerRing.position.set(x, 0.025, z); this.scene.add(outerRing);
+            outerRing.rotation.x = -Math.PI / 2; outerRing.position.set(x, 0.025, z); this._add(outerRing);
 
             const glowLight = new THREE.PointLight(0xff3300, 2, radius * 4);
-            glowLight.position.set(x, -0.5, z); this.scene.add(glowLight);
+            glowLight.position.set(x, -0.5, z); this._add(glowLight);
 
             this.pits.push({ x, z, radius: radius * 0.85 });
         }
@@ -220,33 +342,28 @@ export class World {
         const riverWidth = 24;
         const hw = riverWidth / 2;
         const riverZ = HALF;
+        const t = this.theme;
+        const rng = this.rng;
 
-        // Sky-blue water texture
+        // Themed water texture
         const canvas = document.createElement('canvas');
         canvas.width = 256; canvas.height = 256;
         const ctx = canvas.getContext('2d');
 
         const grad = ctx.createLinearGradient(0, 0, 256, 256);
-        grad.addColorStop(0, '#5bbcde');
-        grad.addColorStop(0.3, '#6dd5f7');
-        grad.addColorStop(0.5, '#87ceeb');
-        grad.addColorStop(0.7, '#6dd5f7');
-        grad.addColorStop(1, '#5bbcde');
+        grad.addColorStop(0,   t.riverColor);
+        grad.addColorStop(0.5, t.riverColor);
+        grad.addColorStop(1,   t.riverColor);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 256, 256);
 
-        // Light ripples
-        ctx.strokeStyle = 'rgba(200, 240, 255, 0.35)';
+        // Surface ripples
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.lineWidth = 1.5;
         for (let i = 0; i < 25; i++) {
             ctx.beginPath();
-            ctx.arc(Math.random() * 256, Math.random() * 256, 4 + Math.random() * 12, 0, Math.PI * 2);
+            ctx.arc(rng() * 256, rng() * 256, 4 + rng() * 12, 0, Math.PI * 2);
             ctx.stroke();
-        }
-        // White highlights
-        ctx.fillStyle = 'rgba(230, 250, 255, 0.2)';
-        for (let i = 0; i < 60; i++) {
-            ctx.fillRect(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 6, 1);
         }
 
         const waterTexture = new THREE.CanvasTexture(canvas);
@@ -256,43 +373,47 @@ export class World {
         this.waterTexture = waterTexture;
 
         // River bed
+        const bedColor = this.themeName === 'storm' ? 0x050505 : (this.themeName === 'toxic' ? 0x0a2a00 : 0x2a4a5a);
         const bed = new THREE.Mesh(
             new THREE.BoxGeometry(ARENA_SIZE - 4, 1.5, riverWidth + 4),
-            new THREE.MeshStandardMaterial({ color: 0x2a4a5a, roughness: 0.9 })
+            new THREE.MeshStandardMaterial({ color: bedColor, roughness: 0.9 })
         );
         bed.position.set(HALF, -0.75, riverZ);
-        this.scene.add(bed);
+        this._add(bed);
 
-        // Water surface — deep realistic blue
-        const water = new THREE.Mesh(
-            new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth),
-            new THREE.MeshStandardMaterial({
-                color: 0x003366,
-                transparent: true, opacity: 0.9,
-                roughness: 0.05, metalness: 0.85,
-                bumpMap: waterTexture, bumpScale: 0.04
-            })
-        );
+        // Water surface
+        const waterColor = this.themeName === 'storm' ? 0x050505 : (this.themeName === 'toxic' ? 0x003300 : 0x003366);
+        const waterMat = new THREE.MeshStandardMaterial({
+            color: waterColor,
+            transparent: true, opacity: 0.92,
+            roughness: 0.05, metalness: 0.85,
+            bumpMap: waterTexture, bumpScale: 0.04
+        });
+        if (this.themeName === 'toxic') {
+            waterMat.emissive = new THREE.Color(0x004400);
+            waterMat.emissiveIntensity = 0.4;
+        }
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth), waterMat);
         water.rotation.x = -Math.PI / 2;
         water.position.set(HALF, -0.08, riverZ);
-        this.scene.add(water);
+        this._add(water);
 
-        // Riverbank edges — earthy brown
-        const bankMat = new THREE.MeshStandardMaterial({ color: 0x6b5b3a, roughness: 0.85 });
+        // Riverbank edges
+        const bankColor = this.themeName === 'toxic' ? 0x2a3a1a : (this.themeName === 'storm' ? 0x2a2a2a : 0x6b5b3a);
+        const bankMat = new THREE.MeshStandardMaterial({ color: bankColor, roughness: 0.85 });
         [-1, 1].forEach(side => {
             const bank = new THREE.Mesh(new THREE.BoxGeometry(ARENA_SIZE - 4, 0.5, 1.8), bankMat);
             bank.position.set(HALF, 0.05, riverZ + side * (hw + 0.6));
             bank.castShadow = true;
-            this.scene.add(bank);
-
-            // Grass edge along bank
-            const grass = new THREE.Mesh(
-                new THREE.BoxGeometry(ARENA_SIZE - 6, 0.05, 1.2),
-                new THREE.MeshStandardMaterial({ color: 0x3a6b2a, roughness: 0.9 })
-            );
-            grass.position.set(HALF, 0.31, riverZ + side * (hw + 1.8));
-            this.scene.add(grass);
+            this._add(bank);
         });
+
+        // Add toxic glow light
+        if (this.themeName === 'toxic') {
+            const glow = new THREE.PointLight(0x00ff44, 1.5, riverWidth * 2);
+            glow.position.set(HALF, 1, riverZ);
+            this._add(glow);
+        }
 
         this.rivers.push({ x1: 2, x2: ARENA_SIZE - 2, z1: riverZ - hw, z2: riverZ + hw });
     }
@@ -566,25 +687,16 @@ export class World {
         this.scene.add(this.sky);
 
         this.sunPosition = new THREE.Vector3();
-
-        const effectController = {
-            turbidity: 10,
-            rayleigh: 2,
-            mieCoefficient: 0.005,
-            mieDirectionalG: 0.8,
-            elevation: 25, 
-            azimuth: 180, 
-            exposure: 1.1
-        };
+        const t = this.theme;
 
         const uniforms = this.sky.material.uniforms;
-        uniforms['turbidity'].value = effectController.turbidity;
-        uniforms['rayleigh'].value = effectController.rayleigh;
-        uniforms['mieCoefficient'].value = effectController.mieCoefficient;
-        uniforms['mieDirectionalG'].value = effectController.mieDirectionalG;
+        uniforms['turbidity'].value    = t.skyTurbidity;
+        uniforms['rayleigh'].value     = t.skyRayleigh;
+        uniforms['mieCoefficient'].value   = 0.005;
+        uniforms['mieDirectionalG'].value  = 0.8;
 
-        const phi = THREE.MathUtils.degToRad(90 - effectController.elevation);
-        const theta = THREE.MathUtils.degToRad(effectController.azimuth);
+        const phi   = THREE.MathUtils.degToRad(90 - t.skyElevation);
+        const theta = THREE.MathUtils.degToRad(t.skyAzimuth);
         this.sunPosition.setFromSphericalCoords(1, phi, theta);
         uniforms['sunPosition'].value.copy(this.sunPosition);
     }
@@ -594,14 +706,18 @@ export class World {
     // ========================================================================
 
     _setupLighting() {
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-        this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.5));
+        this._lights = [];
+        const t = this.theme;
+        const amb = new THREE.AmbientLight(t.ambientColor, 0.5);
+        this.scene.add(amb); this._lights.push(amb);
 
-        const sun = new THREE.DirectionalLight(0xffeedd, 2.0);
+        const hemi = new THREE.HemisphereLight(t.ambientColor, 0x222222, 0.4);
+        this.scene.add(hemi); this._lights.push(hemi);
+
+        const sun = new THREE.DirectionalLight(t.sunColor, 2.0);
         sun.position.copy(this.sunPosition).multiplyScalar(200);
         sun.target.position.set(HALF, 0, HALF);
         sun.position.add(sun.target.position);
-
         sun.castShadow = true;
         sun.shadow.mapSize.set(2048, 2048);
         sun.shadow.camera.near = 1; sun.shadow.camera.far = 600;
@@ -609,9 +725,12 @@ export class World {
         sun.shadow.camera.top = HALF; sun.shadow.camera.bottom = -HALF;
         sun.shadow.bias = -0.001;
         this.scene.add(sun); this.scene.add(sun.target);
+        this._lights.push(sun); this._lights.push(sun.target);
     }
 
-    _setupFog() { this.scene.fog = new THREE.FogExp2(0xa0c8f0, 0.0035); }
+    _setupFog() {
+        this.scene.fog = new THREE.FogExp2(this.theme.fogColor, this.theme.fogDensity);
+    }
 
     // ========================================================================
     // Update (call per frame)

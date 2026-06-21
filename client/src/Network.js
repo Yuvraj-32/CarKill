@@ -118,6 +118,23 @@ export class Network {
         s.on('coinCollected', (data) => {
             this._emit('coinCollected', data);
         });
+
+        // Match system events
+        s.on('mapConfig', (data) => {
+            this._emit('mapConfig', data);
+        });
+        s.on('matchTimer', (data) => {
+            this._emit('matchTimer', data);
+        });
+        s.on('matchEnd', (data) => {
+            this._emit('matchEnd', data);
+        });
+        s.on('matchStart', (data) => {
+            this._emit('matchStart', data);
+        });
+        s.on('roundReset', (data) => {
+            this._emit('roundReset', data);
+        });
     }
 
     _mapPlayer(p) {

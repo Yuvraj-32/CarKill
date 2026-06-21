@@ -9,6 +9,15 @@ class GameRoom {
     constructor() {
         /** @type {Map<string, object>} Socket id → player state */
         this.players = new Map();
+
+        // Match timing & state
+        this.matchDuration  = 10 * 60;                                           // 10 minutes in seconds
+        this.matchTimeLeft  = 10 * 60;
+        this.matchState     = 'playing';                                          // 'playing' | 'celebrating'
+
+        // Map generation — randomised each round
+        this.mapSeed  = Math.floor(Math.random() * 1000000);
+        this.mapTheme = ['wasteland', 'toxic', 'storm'][Math.floor(Math.random() * 3)];
     }
 
     // ----------------------------------------------------------
@@ -77,6 +86,11 @@ class GameRoom {
      * @returns {object} Result: { valid, damage, killed, killer, victim }
      */
     handleCollision(attackerId, targetId, force) {
+        // Block all damage while the celebration phase is active
+        if (this.matchState === 'celebrating') {
+            return { valid: false, damage: 0, killed: false, killer: null, victim: null };
+        }
+
         const attacker = this.players.get(attackerId);
         const target   = this.players.get(targetId);
 
@@ -116,6 +130,53 @@ class GameRoom {
             attackerX: attacker.x,
             attackerY: attacker.y
         };
+    }
+
+    // ----------------------------------------------------------
+    // Match management
+    // ----------------------------------------------------------
+
+    /**
+     * startNewRound — Generate a fresh map seed/theme, reset the
+     * match timer, and respawn every player with zeroed stats.
+     */
+    startNewRound() {
+        this.mapSeed       = Math.floor(Math.random() * 1000000);
+        this.mapTheme      = ['wasteland', 'toxic', 'storm'][Math.floor(Math.random() * 3)];
+        this.matchTimeLeft = this.matchDuration;
+        this.matchState    = 'playing';
+
+        // Reset all player scores and respawn at new positions
+        this.players.forEach(player => {
+            player.kills  = 0;
+            player.deaths = 0;
+            player.coins  = 0;
+            const spawn   = require('./PlayerManager').getRandomSpawnPoint();
+            player.health = player.maxHealth;
+            player.x      = spawn.x;
+            player.y      = spawn.y;
+            player.speed  = 0;
+        });
+    }
+
+    /**
+     * getWinner — Return the player with the highest kill count.
+     * Returns null if the room is empty.
+     */
+    getWinner() {
+        let winner = null;
+        this.players.forEach(player => {
+            if (!winner || player.kills > winner.kills) winner = player;
+        });
+        return winner;
+    }
+
+    /**
+     * getMapConfig — Return the current map seed and theme.
+     * @returns {{ seed: number, theme: string }}
+     */
+    getMapConfig() {
+        return { seed: this.mapSeed, theme: this.mapTheme };
     }
 
     // ----------------------------------------------------------

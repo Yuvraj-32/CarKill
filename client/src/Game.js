@@ -20,6 +20,9 @@ export class Game {
         this.flashAlpha = 0;
         this.coins = 0;
         this.rampBoostY = 0;        // current Y boost from ramp
+        this.celebratingWinner = false;
+        this._pendingMapTheme = 'wasteland';
+        this._pendingMapSeed  = Math.floor(Math.random() * 1000000);
 
         // ---- Renderer ----
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -39,8 +42,8 @@ export class Game {
             70, window.innerWidth / window.innerHeight, 0.5, 600
         );
 
-        // ---- World ----
-        this.world = new World(this.scene);
+        // ---- World (theme applied after mapConfig arrives from server) ----
+        this.world = new World(this.scene, this._pendingMapTheme, this._pendingMapSeed);
 
         // ---- Local player car ----
         const spawnX = 30 + Math.random() * (ARENA_SIZE - 60);
@@ -268,6 +271,20 @@ export class Game {
     // ========================================================================
 
     _updateCamera(delta) {
+        // During winner celebration: orbit camera around winner's car
+        if (this.celebratingWinner && this._celebrationTarget) {
+            this._celebrationAngle = (this._celebrationAngle || 0) + delta * 0.8;
+            const target = this._celebrationTarget.getPosition();
+            const radius = 18;
+            this.camera.position.set(
+                target.x + Math.sin(this._celebrationAngle) * radius,
+                target.y + 8,
+                target.z + Math.cos(this._celebrationAngle) * radius
+            );
+            this.camera.lookAt(target.x, target.y + 1.5, target.z);
+            return;
+        }
+
         if (!this.player.cameraGoal) return;
 
         const goalPos = new THREE.Vector3();
@@ -526,6 +543,53 @@ export class Game {
         net.on('coinCollected', (data) => {
             this.coins = data.coins;
             this.hud.updateCoins(this.coins);
+        });
+
+        // ---- Match system events ----
+        net.on('mapConfig', (data) => {
+            // Rebuild world with correct theme + seed
+            this.world.destroy();
+            this.world = new World(this.scene, data.theme, data.seed);
+            this.hud.showThemeLabel(data.theme);
+        });
+
+        net.on('matchTimer', (data) => {
+            this.hud.updateMatchTimer(data.timeLeft);
+        });
+
+        net.on('matchEnd', (data) => {
+            this.celebratingWinner = true;
+            this.hud.showWinnerBanner(data.winnerName, data.kills);
+            // Try to focus camera on winner
+            if (data.winnerId && this.remotePlayers[data.winnerId]) {
+                this._celebrationTarget = this.remotePlayers[data.winnerId];
+            } else if (data.winnerId === net.id) {
+                this._celebrationTarget = this.player;
+            }
+        });
+
+        net.on('matchStart', (data) => {
+            // Rebuild world with new theme
+            this.hud.hideWinnerBanner();
+            this.celebratingWinner = false;
+            this._celebrationTarget = null;
+            this.world.destroy();
+            this.world = new World(this.scene, data.theme, data.seed);
+            this.hud.showThemeLabel(data.theme);
+        });
+
+        net.on('roundReset', (players) => {
+            // Respawn all players
+            players.forEach(p => {
+                if (p.id === net.id) {
+                    this._onRespawn(p.x3d, p.z3d, p.vehicleType);
+                } else if (this.remotePlayers[p.id]) {
+                    const remote = this.remotePlayers[p.id];
+                    remote.group.visible = true;
+                    remote.health = p.health;
+                    remote.updateFromServer(p.x3d, p.z3d, 0);
+                }
+            });
         });
     }
 

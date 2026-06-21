@@ -22,7 +22,12 @@ export class HUD {
             coinCounter:     document.getElementById('coin-counter'),
             shopCoinCount:   document.getElementById('shop-coin-count'),
             shopCards:       document.querySelectorAll('.shop-card'),
-            respawnBtn:      document.getElementById('respawn-btn')
+            respawnBtn:      document.getElementById('respawn-btn'),
+            matchTimer:      document.getElementById('match-timer'),
+            winnerBanner:    document.getElementById('winner-banner'),
+            winnerName:      document.getElementById('winner-name'),
+            winnerKills:     document.getElementById('winner-kills'),
+            themeLabel:      document.getElementById('theme-label')
         };
 
         this.localPlayerId = null;
@@ -66,8 +71,42 @@ export class HUD {
     // ---- Speed ----
 
     updateSpeed(speed) {
-        const kmh = Math.abs(Math.round(speed * 3.6)); // rough conversion
+        const kmh = Math.abs(Math.round(speed * 3.6));
         this.els.speedValue.textContent = kmh;
+    }
+
+    // ---- Match Timer ----
+
+    updateMatchTimer(secondsLeft) {
+        if (!this.els.matchTimer) return;
+        const m = Math.floor(secondsLeft / 60).toString().padStart(2, '0');
+        const s = (secondsLeft % 60).toString().padStart(2, '0');
+        this.els.matchTimer.textContent = `${m}:${s}`;
+        // Turn red when < 30s
+        this.els.matchTimer.style.color = secondsLeft < 30 ? '#ff4422' : '#ffffff';
+    }
+
+    showThemeLabel(theme) {
+        if (!this.els.themeLabel) return;
+        const icons = { wasteland: '🏜️', toxic: '☣️', storm: '🌪️' };
+        const names = { wasteland: 'WASTELAND', toxic: 'TOXIC ZONE', storm: 'ASH STORM' };
+        this.els.themeLabel.textContent = `${icons[theme] || ''} ${names[theme] || theme.toUpperCase()}`;
+        this.els.themeLabel.style.opacity = '1';
+        setTimeout(() => { if (this.els.themeLabel) this.els.themeLabel.style.opacity = '0'; }, 4000);
+    }
+
+    // ---- Winner Banner ----
+
+    showWinnerBanner(name, kills) {
+        if (!this.els.winnerBanner) return;
+        this.els.winnerName.textContent = name;
+        this.els.winnerKills.textContent = `${kills} KILLS`;
+        this.els.winnerBanner.classList.add('visible');
+    }
+
+    hideWinnerBanner() {
+        if (!this.els.winnerBanner) return;
+        this.els.winnerBanner.classList.remove('visible');
     }
 
     // ---- Coins ----
