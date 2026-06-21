@@ -371,12 +371,13 @@ export class HUD {
         this.els.editLayoutBtn.addEventListener('click', () => {
             this.els.settingsModal.style.display = 'none';
             this.els.uiEditOverlay.style.display = 'block';
+            this.els.hud.style.zIndex = '500'; // Elevate entire HUD above edit overlay
             
             // Show mobile controls temporarily so they can be dragged
             const mc = document.getElementById('mobile-controls');
             if (mc) {
                 mc.style.display = 'block';
-                mc.style.pointerEvents = 'auto'; // allow dragging
+                mc.style.zIndex = '500'; // Bring above edit overlay
             }
             this.els.uiScaleSlider.value = this.config.mobileLayout.btnLeft.scale || 1;
             
@@ -395,10 +396,13 @@ export class HUD {
         this.els.saveLayoutBtn.addEventListener('click', () => {
             this.els.uiEditOverlay.style.display = 'none';
             this.els.settingsModal.style.display = 'flex'; // Go back to settings
+            this.els.hud.style.zIndex = ''; // Reset HUD z-index
             Settings.save(this.config);
             
             const mc = document.getElementById('mobile-controls');
-            if (mc) mc.style.pointerEvents = 'none'; // reset
+            if (mc) {
+                mc.style.zIndex = ''; // Reset to CSS default
+            }
         });
 
         this._setupDraggableButtons();
@@ -451,8 +455,12 @@ export class HUD {
             const moveDrag = (e) => {
                 if (!isDragging) return;
                 e.preventDefault();
-                let clientX = e.clientX || (e.touches && e.touches[0].clientX);
-                let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                let clientX = e.clientX;
+                let clientY = e.clientY;
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
                 
                 if (clientX !== undefined && clientY !== undefined) {
                     // Convert to vw/vh
