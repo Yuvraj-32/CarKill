@@ -334,88 +334,227 @@ export class World {
         }
     }
 
-    // ========================================================================
-    // River — sky-blue flowing water across the arena center
-    // ========================================================================
-
     _createRiver() {
         const riverWidth = 24;
         const hw = riverWidth / 2;
         const riverZ = HALF;
-        const t = this.theme;
         const rng = this.rng;
 
-        // Themed water texture
-        const canvas = document.createElement('canvas');
-        canvas.width = 256; canvas.height = 256;
-        const ctx = canvas.getContext('2d');
+        // ---- Theme config ----
+        const themes = {
+            wasteland: {
+                deepColor: 0x4a3010, shallowColor: 0x7a5828,
+                foamColor: 'rgba(180,140,60,0.4)', flowColor: 'rgba(200,160,80,0.12)',
+                bedColor: 0x2a1a08, bankColor: 0x5a3a1a,
+                emissive: null, lightColor: null, fogBand: 0x8a6530
+            },
+            toxic: {
+                deepColor: 0x002200, shallowColor: 0x004400,
+                foamColor: 'rgba(0,255,80,0.35)', flowColor: 'rgba(0,200,60,0.15)',
+                bedColor: 0x001500, bankColor: 0x1a3010,
+                emissive: new THREE.Color(0x003300), lightColor: 0x00ff44, fogBand: 0x004400
+            },
+            storm: {
+                deepColor: 0x050505, shallowColor: 0x101010,
+                foamColor: 'rgba(80,80,80,0.3)', flowColor: 'rgba(60,60,60,0.1)',
+                bedColor: 0x030303, bankColor: 0x1a1a1a,
+                emissive: null, lightColor: null, fogBand: 0x050505
+            }
+        };
+        const tc = themes[this.themeName] || themes.wasteland;
 
-        const grad = ctx.createLinearGradient(0, 0, 256, 256);
-        grad.addColorStop(0,   t.riverColor);
-        grad.addColorStop(0.5, t.riverColor);
-        grad.addColorStop(1,   t.riverColor);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 256, 256);
-
-        // Surface ripples
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1.5;
-        for (let i = 0; i < 25; i++) {
-            ctx.beginPath();
-            ctx.arc(rng() * 256, rng() * 256, 4 + rng() * 12, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        const waterTexture = new THREE.CanvasTexture(canvas);
-        waterTexture.wrapS = THREE.RepeatWrapping;
-        waterTexture.wrapT = THREE.RepeatWrapping;
-        waterTexture.repeat.set(20, 2);
-        this.waterTexture = waterTexture;
-
-        // River bed
-        const bedColor = this.themeName === 'storm' ? 0x050505 : (this.themeName === 'toxic' ? 0x0a2a00 : 0x2a4a5a);
+        // ---- River bed (slightly wider/deeper for depth illusion) ----
         const bed = new THREE.Mesh(
-            new THREE.BoxGeometry(ARENA_SIZE - 4, 1.5, riverWidth + 4),
-            new THREE.MeshStandardMaterial({ color: bedColor, roughness: 0.9 })
+            new THREE.BoxGeometry(ARENA_SIZE - 4, 3, riverWidth + 6),
+            new THREE.MeshStandardMaterial({ color: tc.bedColor, roughness: 1.0 })
         );
-        bed.position.set(HALF, -0.75, riverZ);
+        bed.position.set(HALF, -1.5, riverZ);
         this._add(bed);
 
-        // Water surface
-        const waterColor = this.themeName === 'storm' ? 0x050505 : (this.themeName === 'toxic' ? 0x003300 : 0x003366);
-        const waterMat = new THREE.MeshStandardMaterial({
-            color: waterColor,
-            transparent: true, opacity: 0.92,
-            roughness: 0.05, metalness: 0.85,
-            bumpMap: waterTexture, bumpScale: 0.04
-        });
-        if (this.themeName === 'toxic') {
-            waterMat.emissive = new THREE.Color(0x004400);
-            waterMat.emissiveIntensity = 0.4;
+        // ---- Main water surface — deep center ----
+        const mainWaterGeo = new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth, 80, 8);
+        // Vertex-displace the top surface slightly for wave shape
+        const verts = mainWaterGeo.attributes.position;
+        for (let i = 0; i < verts.count; i++) {
+            const z = verts.getY(i); // PlaneGeometry Y is depth axis before rotation
+            const noise = (rng() - 0.5) * 0.06;
+            verts.setZ(i, noise); // gentle height variation
         }
-        const water = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth), waterMat);
-        water.rotation.x = -Math.PI / 2;
-        water.position.set(HALF, -0.08, riverZ);
-        this._add(water);
+        mainWaterGeo.computeVertexNormals();
 
-        // Riverbank edges
-        const bankColor = this.themeName === 'toxic' ? 0x2a3a1a : (this.themeName === 'storm' ? 0x2a2a2a : 0x6b5b3a);
-        const bankMat = new THREE.MeshStandardMaterial({ color: bankColor, roughness: 0.85 });
+        this._mainWaterTex = this._makeFlowTexture(tc.flowColor, tc.foamColor, rng);
+        this._mainWaterTex.wrapS = THREE.RepeatWrapping;
+        this._mainWaterTex.wrapT = THREE.RepeatWrapping;
+        this._mainWaterTex.repeat.set(12, 2);
+        this.waterTexture = this._mainWaterTex; // keep reference for update()
+
+        const mainWaterMat = new THREE.MeshStandardMaterial({
+            color: tc.deepColor,
+            transparent: true, opacity: 0.93,
+            roughness: 0.02, metalness: 0.88,
+            bumpMap: this._mainWaterTex,
+            bumpScale: 0.12
+        });
+        if (tc.emissive) {
+            mainWaterMat.emissive = tc.emissive;
+            mainWaterMat.emissiveIntensity = 0.5;
+        }
+        const mainWater = new THREE.Mesh(mainWaterGeo, mainWaterMat);
+        mainWater.rotation.x = -Math.PI / 2;
+        mainWater.position.set(HALF, -0.05, riverZ);
+        mainWater.receiveShadow = true;
+        this._add(mainWater);
+        this._waterMesh = mainWater;
+
+        // ---- Shimmer layer (slightly above, fast-moving diagonal UV) ----
+        this._shimmerTex = this._makeShimmerTexture(tc.foamColor, rng);
+        this._shimmerTex.wrapS = THREE.RepeatWrapping;
+        this._shimmerTex.wrapT = THREE.RepeatWrapping;
+        this._shimmerTex.repeat.set(8, 3);
+
+        const shimmerMat = new THREE.MeshBasicMaterial({
+            color: tc.shallowColor,
+            transparent: true, opacity: 0.18,
+            map: this._shimmerTex,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        const shimmer = new THREE.Mesh(
+            new THREE.PlaneGeometry(ARENA_SIZE - 4, riverWidth),
+            shimmerMat
+        );
+        shimmer.rotation.x = -Math.PI / 2;
+        shimmer.position.set(HALF, 0.01, riverZ);
+        this._add(shimmer);
+        this._shimmerMesh = shimmer;
+
+        // ---- Foam strips along both banks ----
+        this._foamTex = this._makeFoamTexture(tc.foamColor, rng);
+        this._foamTex.wrapS = THREE.RepeatWrapping;
+        this._foamTex.wrapT = THREE.RepeatWrapping;
+        this._foamTex.repeat.set(30, 1);
         [-1, 1].forEach(side => {
-            const bank = new THREE.Mesh(new THREE.BoxGeometry(ARENA_SIZE - 4, 0.5, 1.8), bankMat);
-            bank.position.set(HALF, 0.05, riverZ + side * (hw + 0.6));
-            bank.castShadow = true;
-            this._add(bank);
+            const foamMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true, opacity: this.themeName === 'storm' ? 0.12 : 0.3,
+                map: this._foamTex, depthWrite: false
+            });
+            const foam = new THREE.Mesh(
+                new THREE.PlaneGeometry(ARENA_SIZE - 4, 2.5),
+                foamMat
+            );
+            foam.rotation.x = -Math.PI / 2;
+            foam.position.set(HALF, 0.02, riverZ + side * (hw - 1.5));
+            this._add(foam);
         });
 
-        // Add toxic glow light
-        if (this.themeName === 'toxic') {
-            const glow = new THREE.PointLight(0x00ff44, 1.5, riverWidth * 2);
-            glow.position.set(HALF, 1, riverZ);
-            this._add(glow);
+        // ---- Bank edges ----
+        const bankMat = new THREE.MeshStandardMaterial({ color: tc.bankColor, roughness: 0.9 });
+        [-1, 1].forEach(side => {
+            // Sloped bank using a wedge shape
+            const bankGeo = new THREE.BoxGeometry(ARENA_SIZE - 4, 0.6, 2.5);
+            const bank = new THREE.Mesh(bankGeo, bankMat);
+            bank.position.set(HALF, -0.05, riverZ + side * (hw + 0.8));
+            bank.castShadow = true;
+            bank.receiveShadow = true;
+            this._add(bank);
+
+            // Wet sand strip right at water's edge
+            const wetMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(tc.bankColor).multiplyScalar(0.6), roughness: 0.5, metalness: 0.1
+            });
+            const wetStrip = new THREE.Mesh(
+                new THREE.PlaneGeometry(ARENA_SIZE - 4, 1.2),
+                wetMat
+            );
+            wetStrip.rotation.x = -Math.PI / 2;
+            wetStrip.position.set(HALF, 0.005, riverZ + side * (hw + 0.1));
+            this._add(wetStrip);
+        });
+
+        // ---- Caustic / animated shimmer point lights ----
+        const lightCount = this.themeName === 'toxic' ? 5 : 4;
+        this._causticLights = [];
+        for (let i = 0; i < lightCount; i++) {
+            const lx = 20 + (ARENA_SIZE - 40) * (i / (lightCount - 1));
+            const lightColor = tc.lightColor ||
+                (this.themeName === 'wasteland' ? 0x88ccff : 0x4488cc);
+            const light = new THREE.PointLight(lightColor, 0.8, 20);
+            light.position.set(lx, 1.5, riverZ);
+            this._causticLights.push({ light, baseX: lx, phase: rng() * Math.PI * 2 });
+            this._add(light);
         }
 
         this.rivers.push({ x1: 2, x2: ARENA_SIZE - 2, z1: riverZ - hw, z2: riverZ + hw });
+    }
+
+    /** Create a flowing water texture with diagonal streaks */
+    _makeFlowTexture(flowColor, foamColor, rng) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, 512, 256);
+
+        // Diagonal flow streaks
+        for (let i = 0; i < 60; i++) {
+            const x = rng() * 512;
+            const len = 20 + rng() * 80;
+            const width = 1 + rng() * 3;
+            ctx.strokeStyle = flowColor;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(x, rng() * 256);
+            ctx.lineTo(x + len * 0.3, rng() * 256);
+            ctx.stroke();
+        }
+        // Ripple circles
+        ctx.strokeStyle = foamColor;
+        for (let i = 0; i < 30; i++) {
+            ctx.lineWidth = 0.5 + rng() * 1.5;
+            ctx.beginPath();
+            ctx.arc(rng() * 512, rng() * 256, 3 + rng() * 20, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    /** Create a shimmer/highlight texture */
+    _makeShimmerTexture(foamColor, rng) {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, 256, 128);
+        for (let i = 0; i < 40; i++) {
+            const x = rng() * 256, y = rng() * 128;
+            const r = 2 + rng() * 10;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, foamColor);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    /** Create foam edge texture */
+    _makeFoamTexture(foamColor, rng) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 64;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, 512, 64);
+        // Irregular foam blobs
+        for (let i = 0; i < 80; i++) {
+            const x = rng() * 512, y = 10 + rng() * 44;
+            const r = 2 + rng() * 8;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, foamColor);
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
     }
 
     // ========================================================================
@@ -737,7 +876,31 @@ export class World {
     // ========================================================================
 
     update(delta) {
-        if (this.waterTexture) this.waterTexture.offset.x += delta * 0.15;
+        const t = (this._time = (this._time || 0) + delta);
+
+        // ---- Main water flow (scroll along X axis = river direction) ----
+        if (this.waterTexture) {
+            this.waterTexture.offset.x += delta * 0.25;
+        }
+
+        // ---- Shimmer layer scrolls diagonally at a different speed ----
+        if (this._shimmerTex) {
+            this._shimmerTex.offset.x += delta * 0.18;
+            this._shimmerTex.offset.y += delta * 0.06;
+        }
+
+        // ---- Caustic lights animate — pulse intensity + gentle drift ----
+        if (this._causticLights) {
+            this._causticLights.forEach((entry, i) => {
+                const { light, baseX, phase } = entry;
+                // Pulsing intensity
+                light.intensity = 0.4 + Math.sin(t * 2.5 + phase) * 0.35;
+                // Subtle Z drift (perpendicular to flow)
+                light.position.z = (ARENA_SIZE / 2) + Math.sin(t * 1.2 + phase) * 2;
+                // Y bob
+                light.position.y = 1.2 + Math.abs(Math.sin(t * 3 + phase)) * 0.6;
+            });
+        }
     }
 
     // ========================================================================
