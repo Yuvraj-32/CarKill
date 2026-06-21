@@ -27,7 +27,9 @@ export class Game {
         // ---- Renderer ----
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const maxPixelRatio = isMobile ? 1 : 1.5;
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;

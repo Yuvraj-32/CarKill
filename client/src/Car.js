@@ -250,14 +250,14 @@ export class Car {
             const turretGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.5, 8);
             const turret = new THREE.Mesh(turretGeo, darkMat);
             turret.position.set(0, 0.5 + cfg.bodyH + 0.25, -0.3);
-            turret.castShadow = true;
+            turret.castShadow = false;
             this.chassis.add(turret);
 
             const barrelGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 8);
             const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.7 }));
             barrel.rotation.x = Math.PI / 2;
             barrel.position.set(0, 0.5 + cfg.bodyH + 0.25, 1.6);
-            barrel.castShadow = true;
+            barrel.castShadow = false;
             this.chassis.add(barrel);
         }
 
@@ -334,11 +334,9 @@ export class Car {
             this.chassis.add(target);
             spot.target = target;
 
-            // Only local car casts headlight shadows to save massive performance
+            // Shadows from multiple spotlights are incredibly expensive on mobile. Disabled.
             if (this.isLocal) {
-                spot.castShadow = true;
-                spot.shadow.mapSize.width = 512;
-                spot.shadow.mapSize.height = 512;
+                spot.castShadow = false;
             }
             this.chassis.add(spot);
         });
@@ -375,19 +373,19 @@ export class Car {
             const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
             const pipe = new THREE.Mesh(pipeGeo, exhaustMat);
             pipe.position.set(ex, 0.5 + cfg.bodyH + 0.3, frontZ - 0.6);
-            pipe.castShadow = true;
+            pipe.castShadow = false;
             this.chassis.add(pipe);
             this.exhaustPipes.push(pipe);
         });
 
         // Cow Catcher / Plow
-        const plowMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9, roughness: 0.7 });
+        const plowMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.2 });
         const plowGeo = new THREE.CylinderGeometry(0.8, 0.8, cfg.bodyW + 0.4, 3);
         const plow = new THREE.Mesh(plowGeo, plowMat);
         plow.rotation.z = Math.PI / 2;
         plow.rotation.x = Math.PI / 5;
         plow.position.set(0, 0.35, frontZ + 0.6);
-        plow.castShadow = true;
+        plow.castShadow = false;
         this.chassis.add(plow);
 
         const spikeLen = 1.4;

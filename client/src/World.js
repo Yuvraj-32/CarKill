@@ -936,7 +936,8 @@ export class World {
         sun.target.position.set(HALF, 0, HALF);
         sun.position.add(sun.target.position);
         sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
+        const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        sun.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
         sun.shadow.camera.near = 1; sun.shadow.camera.far = 600;
         sun.shadow.camera.left = -HALF; sun.shadow.camera.right = HALF;
         sun.shadow.camera.top = HALF; sun.shadow.camera.bottom = -HALF;
