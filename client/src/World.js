@@ -383,14 +383,36 @@ export class World {
         configs.forEach(cfg => {
             const group = new THREE.Group();
 
-            // Build Mountain Slope (Wedge)
-            const geo = new THREE.BoxGeometry(rampW, totalH, totalD);
+            // Build Mountain Slope (Wedge with jagged terrain)
+            // Using a BoxGeometry with segments so we can perturb the top vertices
+            const geo = new THREE.BoxGeometry(rampW, totalH, totalD, 5, 1, 8);
             const pos = geo.attributes.position;
             
-            // Pinch the top-back edge down to form a slope
             for (let i = 0; i < pos.count; i++) {
-                if (pos.getY(i) > 0 && pos.getZ(i) < 0) {
-                    pos.setY(i, -totalH / 2);
+                const y = pos.getY(i);
+                const z = pos.getZ(i);
+                const x = pos.getX(i);
+
+                // Only perturb the top surface to form the slope
+                if (y > 0) {
+                    // z goes from -totalD/2 (back/bottom) to +totalD/2 (front/top)
+                    const progress = (z + totalD / 2) / totalD;
+                    
+                    // Base height for the perfect slope
+                    let newY = -totalH / 2 + progress * totalH;
+
+                    // Add random noise to make it jagged like a mountain
+                    // We avoid noise at the very front/back edges so it transitions smoothly
+                    if (progress > 0.05 && progress < 0.95) {
+                        newY += (Math.random() - 0.5) * 0.8;
+                        
+                        // Also add slight horizontal noise
+                        if (Math.abs(x) < rampW / 2 - 0.1) {
+                            pos.setX(i, x + (Math.random() - 0.5) * 0.5);
+                        }
+                    }
+
+                    pos.setY(i, newY);
                 }
             }
             geo.computeVertexNormals();
