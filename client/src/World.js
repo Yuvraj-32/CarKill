@@ -29,26 +29,26 @@ function createSeededRng(seed) {
 // Theme definitions
 const THEMES = {
     wasteland: {
-        groundColor: '#5c4a2a', groundNoise: '#7a6035',
-        skyTurbidity: 15, skyRayleigh: 0.5, skyElevation: 8, skyAzimuth: 210,
-        fogColor: 0xd4874a, fogDensity: 0.006,
-        ambientColor: 0xffddaa, sunColor: 0xff8833,
+        groundColor: '#6c5632', groundNoise: '#8b6f3c', // Slightly richer brown
+        skyTurbidity: 10, skyRayleigh: 0.6, skyElevation: 12, skyAzimuth: 210, // Brighter sky
+        fogColor: 0xe69f63, fogDensity: 0.0035, // Clearer, vibrant fog
+        ambientColor: 0xffeedd, sunColor: 0xffaa55,
         riverColor: '#8a7040', riverEmissive: 0x0,
         groundLabel: 'wasteland'
     },
     toxic: {
-        groundColor: '#2a3d1e', groundNoise: '#3a5228',
-        skyTurbidity: 20, skyRayleigh: 1.0, skyElevation: 15, skyAzimuth: 90,
-        fogColor: 0x4a6a2a, fogDensity: 0.007,
-        ambientColor: 0xaaffaa, sunColor: 0x88cc44,
+        groundColor: '#354d26', groundNoise: '#456631', // Brighter green ground
+        skyTurbidity: 15, skyRayleigh: 1.2, skyElevation: 20, skyAzimuth: 90,
+        fogColor: 0x6b9e38, fogDensity: 0.004, // Clearer, toxic green fog
+        ambientColor: 0xccffcc, sunColor: 0xaaff66,
         riverColor: '#1a4a00', riverEmissive: 0x00ff44,
         groundLabel: 'toxic'
     },
     storm: {
-        groundColor: '#2a2a2a', groundNoise: '#3d3d3d',
-        skyTurbidity: 20, skyRayleigh: 0.2, skyElevation: 5, skyAzimuth: 270,
-        fogColor: 0x3a3a4a, fogDensity: 0.01,
-        ambientColor: 0x8888aa, sunColor: 0x5555aa,
+        groundColor: '#3a3a3a', groundNoise: '#4d4d4d', // Lighter grey
+        skyTurbidity: 18, skyRayleigh: 0.3, skyElevation: 8, skyAzimuth: 270,
+        fogColor: 0x55556b, fogDensity: 0.006, // Clearer, striking blue-grey fog
+        ambientColor: 0xaaaacc, sunColor: 0x7777cc,
         riverColor: '#0a0a0a', riverEmissive: 0x0,
         groundLabel: 'storm'
     }
@@ -925,13 +925,13 @@ export class World {
     _setupLighting() {
         this._lights = [];
         const t = this.theme;
-        const amb = new THREE.AmbientLight(t.ambientColor, 0.5);
+        const amb = new THREE.AmbientLight(t.ambientColor, 0.85); // Boosted ambient light
         this.scene.add(amb); this._lights.push(amb);
 
-        const hemi = new THREE.HemisphereLight(t.ambientColor, 0x222222, 0.4);
+        const hemi = new THREE.HemisphereLight(t.ambientColor, 0x333333, 0.65); // Boosted hemi light
         this.scene.add(hemi); this._lights.push(hemi);
 
-        const sun = new THREE.DirectionalLight(t.sunColor, 2.0);
+        const sun = new THREE.DirectionalLight(t.sunColor, 2.8); // Boosted sun intensity
         sun.position.copy(this.sunPosition).multiplyScalar(200);
         sun.target.position.set(HALF, 0, HALF);
         sun.position.add(sun.target.position);
