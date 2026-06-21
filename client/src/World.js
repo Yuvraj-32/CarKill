@@ -585,7 +585,11 @@ export class World {
         ];
         const riverZ = HALF;
         const bridgeLen = 30;
+        const archHeight = 4.0; // The height of the semi-circle arch at the center
         const rng = this.rng;
+
+        // Track arches for physics (driving over them)
+        this.bridgeArches = this.bridgeArches || [];
 
         // Materials
         const woodTex = this._createWoodTexture();
@@ -602,102 +606,114 @@ export class World {
             const group = new THREE.Group();
             const plankW = cfg.w - 0.6;
 
-            // 1. Planks (uneven for rugged look)
-            for (let p = -bridgeLen / 2; p < bridgeLen / 2; p += 0.8) {
+            this.bridgeArches.push({ x: cfg.x, z: riverZ, w: cfg.w, len: bridgeLen, height: archHeight });
+
+            // 1. Planks (uneven, following the arch)
+            for (let p = -bridgeLen / 2; p <= bridgeLen / 2; p += 0.8) {
+                const progress = p / (bridgeLen / 2); // -1 to 1
+                const archY = archHeight * (1 - progress * progress); // Parabola formula
+                const slope = archHeight * -2 * p / Math.pow(bridgeLen / 2, 2); // Derivative for rotation
+                const angle = Math.atan(slope);
+
                 const plank = new THREE.Mesh(
                     new THREE.BoxGeometry(plankW, 0.15, 0.75),
                     deckMat
                 );
-                // Slightly uneven
-                plank.position.set(0, 0.76 + (rng() * 0.04), p);
-                plank.rotation.x = (rng() - 0.5) * 0.06;
+                plank.position.set(0, archY + (rng() * 0.04), p);
+                plank.rotation.x = -angle + (rng() - 0.5) * 0.06;
                 plank.rotation.z = (rng() - 0.5) * 0.04;
                 plank.castShadow = true;
                 plank.receiveShadow = true;
                 group.add(plank);
             }
 
-            // 2. Thick Support Beams (underneath)
+            // 2. Thick Support Beams (underneath, following the arch curve)
             [-1, 1].forEach(side => {
-                const beam = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.6, 0.5, bridgeLen),
-                    new THREE.MeshStandardMaterial({ color: darkWood, roughness: 0.9 })
-                );
-                beam.position.set(side * (plankW / 2 - 0.8), 0.45, 0);
+                const beamX = side * (plankW / 2 - 0.8);
+                const beamPoints = [];
+                for (let p = -bridgeLen / 2; p <= bridgeLen / 2; p += 1) {
+                    const progress = p / (bridgeLen / 2);
+                    const archY = archHeight * (1 - progress * progress);
+                    beamPoints.push(new THREE.Vector3(beamX, archY - 0.2, p));
+                }
+                const beamCurve = new THREE.CatmullRomCurve3(beamPoints);
+                const beamGeo = new THREE.TubeGeometry(beamCurve, 20, 0.3, 8, false);
+                const beam = new THREE.Mesh(beamGeo, new THREE.MeshStandardMaterial({ color: darkWood, roughness: 0.9 }));
                 beam.castShadow = true;
                 group.add(beam);
             });
 
-            // 3. Thick Concrete/Metal Pillars into the river bed
+            // 3. Thick Concrete/Metal Pillars anchoring arch into the river bed
             [-1, 0, 1].forEach(pIdx => {
+                const p = pIdx * 8; // -8, 0, 8
+                const progress = p / (bridgeLen / 2);
+                const archY = archHeight * (1 - progress * progress);
+
                 [-1, 1].forEach(side => {
-                    // Pillars go from y=0.5 down to riverbed (y=-2.0 relative to group)
-                    const pillarGeo = new THREE.CylinderGeometry(0.5, 0.6, 4, 8);
+                    const pHeight = archY + 2.5; // From riverbed (-2.5) up to arch deck
+                    const pillarGeo = new THREE.CylinderGeometry(0.5, 0.6, pHeight, 8);
                     const pillar = new THREE.Mesh(pillarGeo, metalMat);
-                    pillar.position.set(side * (plankW / 2 - 0.4), -1.0, pIdx * 8);
+                    pillar.position.set(side * (plankW / 2 - 0.4), archY - (pHeight / 2), p);
                     pillar.castShadow = true;
                     group.add(pillar);
                 });
             });
 
-            // 4. Side Railings (Metal Pipes + Diagonal Trusses)
+            // 4. Side Railings (Curving along the arch + Collision boxes)
             [-1, 1].forEach(side => {
                 const railX = side * (plankW / 2 + 0.1);
                 
-                // Top rail pipe
-                const topRail = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.15, 0.15, bridgeLen, 8),
-                    metalMat
-                );
-                topRail.rotation.x = Math.PI / 2;
-                topRail.position.set(railX, 1.4, 0);
-                topRail.castShadow = true;
-                group.add(topRail);
+                // Continuous curved pipe rails
+                const topPoints = [], botPoints = [];
+                for (let p = -bridgeLen / 2; p <= bridgeLen / 2; p += 1) {
+                    const progress = p / (bridgeLen / 2);
+                    const archY = archHeight * (1 - progress * progress);
+                    topPoints.push(new THREE.Vector3(railX, archY + 1.4, p));
+                    botPoints.push(new THREE.Vector3(railX, archY + 0.9, p));
+                }
+                const topRail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(topPoints), 20, 0.15, 8, false), metalMat);
+                const botRail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(botPoints), 20, 0.1, 8, false), metalMat);
+                topRail.castShadow = true; botRail.castShadow = true;
+                group.add(topRail); group.add(botRail);
 
-                // Bottom rail pipe
-                const botRail = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.1, 0.1, bridgeLen, 8),
-                    metalMat
-                );
-                botRail.rotation.x = Math.PI / 2;
-                botRail.position.set(railX, 0.9, 0);
-                botRail.castShadow = true;
-                group.add(botRail);
-
-                // Vertical posts
+                // Vertical posts & Diagonal Trusses
                 for (let p = -bridgeLen / 2; p <= bridgeLen / 2; p += 3) {
-                    const post = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.2, 1.0, 0.2),
-                        metalMat
-                    );
-                    post.position.set(railX, 1.0, p);
+                    const progress = p / (bridgeLen / 2);
+                    const archY = archHeight * (1 - progress * progress);
+                    
+                    const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.4, 0.2), metalMat);
+                    post.position.set(railX, archY + 0.7, p);
                     post.castShadow = true;
                     group.add(post);
+
+                    // Cross trusses between posts
+                    if (p < bridgeLen / 2) {
+                        const midP = p + 1.5;
+                        const midProg = midP / (bridgeLen / 2);
+                        const midArchY = archHeight * (1 - midProg * midProg);
+                        const slope = archHeight * -2 * midP / Math.pow(bridgeLen / 2, 2);
+                        const angle = Math.atan(slope);
+
+                        const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
+                        cross1.rotation.x = (Math.PI / 4) - angle;
+                        cross1.position.set(railX, midArchY + 0.7, midP);
+                        group.add(cross1);
+
+                        const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
+                        cross2.rotation.x = -(Math.PI / 4) - angle;
+                        cross2.position.set(railX, midArchY + 0.7, midP);
+                        group.add(cross2);
+                    }
                 }
 
-                // Diagonal Truss X-crosses
-                for (let p = -bridgeLen / 2 + 1.5; p < bridgeLen / 2; p += 3) {
-                    const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
-                    cross1.rotation.x = Math.PI / 4;
-                    cross1.position.set(railX, 1.15, p);
-                    group.add(cross1);
-
-                    const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.08), metalMat);
-                    cross2.rotation.x = -Math.PI / 4;
-                    cross2.position.set(railX, 1.15, p);
-                    group.add(cross2);
-                }
-
-                // Add collision boxes for railings so cars don't fall off easily
+                // Railing collision boxes
                 this.obstacles.push({
-                    mesh: null, box: null,
-                    w: 0.5, d: bridgeLen,
-                    x: cfg.x + railX, z: riverZ
+                    mesh: null, box: null, w: 0.5, d: bridgeLen, x: cfg.x + railX, z: riverZ
                 });
             });
 
-            // Adjust group so planks are exactly flush with y=0 ground
-            group.position.set(cfg.x, -0.76, riverZ);
+            // Align bridge perfectly with ground plane (y=0)
+            group.position.set(cfg.x, 0, riverZ);
             this.scene.add(group);
         });
     }
@@ -1022,6 +1038,8 @@ export class World {
     }
 
     checkRamp(pos) {
+        let maxH = 0;
+        // Check structural ramps
         for (const ramp of this.ramps) {
             const dx = Math.abs(pos.x - ramp.x);
             const dz = Math.abs(pos.z - ramp.z);
@@ -1029,9 +1047,21 @@ export class World {
                 let localZ = (ramp.rotY === 0) ? (pos.z - ramp.z) : (ramp.z - pos.z);
                 let progress = (localZ + ramp.d / 2) / ramp.d;
                 progress = Math.max(0, Math.min(1, progress));
-                return progress * ramp.height;
+                maxH = Math.max(maxH, progress * ramp.height);
             }
         }
-        return 0;
+        // Check arched bridges (using parabola physics)
+        if (this.bridgeArches) {
+            for (const arch of this.bridgeArches) {
+                const dx = Math.abs(pos.x - arch.x);
+                const dz = Math.abs(pos.z - arch.z);
+                if (dx < arch.w / 2 && dz <= arch.len / 2) {
+                    // Parabolic curve height
+                    const h = arch.height * (1 - Math.pow(dz / (arch.len / 2), 2));
+                    maxH = Math.max(maxH, h);
+                }
+            }
+        }
+        return maxH;
     }
 }
