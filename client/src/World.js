@@ -117,15 +117,30 @@ export class World {
 
     _createGround() {
         const texture = this._createGroundTexture();
-        const geo = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
         const mat = new THREE.MeshStandardMaterial({
             map: texture, bumpMap: texture, bumpScale: 0.15, roughness: 0.95, metalness: 0.05
         });
-        const ground = new THREE.Mesh(geo, mat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.set(HALF, 0, HALF);
-        ground.receiveShadow = true;
-        this._add(ground);
+
+        // Split ground into two halves to make room for the sunken river
+        const riverWidth = 24;
+        const hw = riverWidth / 2;
+        const groundDepth = HALF - hw;
+
+        // North half
+        const geoNorth = new THREE.PlaneGeometry(ARENA_SIZE, groundDepth);
+        const north = new THREE.Mesh(geoNorth, mat);
+        north.rotation.x = -Math.PI / 2;
+        north.position.set(HALF, 0, groundDepth / 2);
+        north.receiveShadow = true;
+        this._add(north);
+
+        // South half
+        const geoSouth = new THREE.PlaneGeometry(ARENA_SIZE, groundDepth);
+        const south = new THREE.Mesh(geoSouth, mat);
+        south.rotation.x = -Math.PI / 2;
+        south.position.set(HALF, 0, HALF + hw + groundDepth / 2);
+        south.receiveShadow = true;
+        this._add(south);
     }
 
     _createGroundTexture() {
@@ -368,7 +383,7 @@ export class World {
             new THREE.BoxGeometry(ARENA_SIZE - 4, 3, riverWidth + 6),
             new THREE.MeshStandardMaterial({ color: tc.bedColor, roughness: 1.0 })
         );
-        bed.position.set(HALF, -1.5, riverZ);
+        bed.position.set(HALF, -2.5, riverZ);
         this._add(bed);
 
         // ---- Main water surface — deep center ----
@@ -401,7 +416,7 @@ export class World {
         }
         const mainWater = new THREE.Mesh(mainWaterGeo, mainWaterMat);
         mainWater.rotation.x = -Math.PI / 2;
-        mainWater.position.set(HALF, -0.05, riverZ);
+        mainWater.position.set(HALF, -0.85, riverZ); // Lowered river
         mainWater.receiveShadow = true;
         this._add(mainWater);
         this._waterMesh = mainWater;
@@ -423,7 +438,7 @@ export class World {
             shimmerMat
         );
         shimmer.rotation.x = -Math.PI / 2;
-        shimmer.position.set(HALF, 0.01, riverZ);
+        shimmer.position.set(HALF, -0.75, riverZ); // Increased gap to prevent Z-fighting flashing
         this._add(shimmer);
         this._shimmerMesh = shimmer;
 
@@ -443,7 +458,7 @@ export class World {
                 foamMat
             );
             foam.rotation.x = -Math.PI / 2;
-            foam.position.set(HALF, 0.02, riverZ + side * (hw - 1.5));
+            foam.position.set(HALF, -0.70, riverZ + side * (hw - 1.5));
             this._add(foam);
         });
 
@@ -451,9 +466,9 @@ export class World {
         const bankMat = new THREE.MeshStandardMaterial({ color: tc.bankColor, roughness: 0.9 });
         [-1, 1].forEach(side => {
             // Sloped bank using a wedge shape
-            const bankGeo = new THREE.BoxGeometry(ARENA_SIZE - 4, 0.6, 2.5);
+            const bankGeo = new THREE.BoxGeometry(ARENA_SIZE - 4, 1.6, 2.5); // Taller to cover gap
             const bank = new THREE.Mesh(bankGeo, bankMat);
-            bank.position.set(HALF, -0.05, riverZ + side * (hw + 0.8));
+            bank.position.set(HALF, -0.8, riverZ + side * (hw + 0.8)); // Positioned so top is at y=0
             bank.castShadow = true;
             bank.receiveShadow = true;
             this._add(bank);
@@ -467,7 +482,7 @@ export class World {
                 wetMat
             );
             wetStrip.rotation.x = -Math.PI / 2;
-            wetStrip.position.set(HALF, 0.005, riverZ + side * (hw + 0.1));
+            wetStrip.position.set(HALF, -0.65, riverZ + side * (hw + 0.1));
             this._add(wetStrip);
         });
 
