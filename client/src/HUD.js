@@ -45,6 +45,24 @@ export class HUD {
         this.els.hud.style.display = 'none';
     }
 
+    setUITheme(theme) {
+        const root = document.documentElement;
+        if (theme === 'wasteland') {
+            root.style.setProperty('--theme-bg', 'rgba(92, 74, 42, 0.6)');
+            root.style.setProperty('--theme-accent', '#e6aa55');
+            root.style.setProperty('--theme-border', 'rgba(230, 170, 85, 0.4)');
+        } else if (theme === 'toxic') {
+            root.style.setProperty('--theme-bg', 'rgba(42, 61, 30, 0.6)');
+            root.style.setProperty('--theme-accent', '#6b9e38');
+            root.style.setProperty('--theme-border', 'rgba(107, 158, 56, 0.4)');
+        } else {
+            // Storm or default
+            root.style.setProperty('--theme-bg', 'rgba(42, 42, 42, 0.6)');
+            root.style.setProperty('--theme-accent', '#7777cc');
+            root.style.setProperty('--theme-border', 'rgba(119, 119, 204, 0.4)');
+        }
+    }
+
     // ---- Health ----
 
     updateHealth(current, max) {

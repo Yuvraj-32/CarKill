@@ -522,6 +522,7 @@ export class Game {
             this.world.destroy();
             this.world = new World(this.scene, data.theme, data.seed);
             this.hud.showThemeLabel(data.theme);
+            this.hud.setUITheme(data.theme);
         });
 
         net.on('matchTimer', (data) => {
@@ -547,6 +548,7 @@ export class Game {
             this.world.destroy();
             this.world = new World(this.scene, data.theme, data.seed);
             this.hud.showThemeLabel(data.theme);
+            this.hud.setUITheme(data.theme);
         });
 
         net.on('roundReset', (players) => {

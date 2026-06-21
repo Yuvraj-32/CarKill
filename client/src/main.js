@@ -11,6 +11,11 @@ window.addEventListener('DOMContentLoaded', () => {
     hud.showMenu();
     hud.hide(); // game HUD hidden until play
 
+    // Set a random theme for the main menu
+    const themes = ['wasteland', 'toxic', 'storm'];
+    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+    hud.setUITheme(randomTheme);
+
     hud.setupMenuHandlers((playerName, vehicleType) => {
         // Hide menu
         hud.hideMenu();
