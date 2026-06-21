@@ -157,6 +157,8 @@ export class Car {
 
     _buildModel(type, color, cfg) {
         const group = new THREE.Group();
+        this.chassis = new THREE.Group();
+        group.add(this.chassis);
 
         const rustTex = this._createRustTexture(color);
         const darkRustTex = this._createRustTexture('#333333');
@@ -181,306 +183,222 @@ export class Car {
             color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.6
         });
 
-        // ---- Body ----
-        const bodyGeo = new THREE.BoxGeometry(cfg.bodyW, cfg.bodyH, cfg.bodyL);
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.5 + cfg.bodyH / 2;
-        body.castShadow = true;
-        group.add(body);
-
-        // ---- Cabin / Roof ----
+        // ============================================================
+        // 1. Aerodynamic Extruded Body Shapes
+        // ============================================================
+        const extrudeSettings = { depth: cfg.bodyW, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
+        const bodyShape = new THREE.Shape();
+        
         if (type === 'tank') {
-            // Turret instead of cabin
+            // Sloped armor profile
+            bodyShape.moveTo(-cfg.bodyL/2, 0);
+            bodyShape.lineTo(cfg.bodyL/2 - 0.5, 0);
+            bodyShape.lineTo(cfg.bodyL/2, cfg.bodyH * 0.5);
+            bodyShape.lineTo(cfg.bodyL/2 - 0.4, cfg.bodyH);
+            bodyShape.lineTo(-cfg.bodyL/2 + 0.4, cfg.bodyH);
+            bodyShape.lineTo(-cfg.bodyL/2, 0);
+        } else if (type === 'van') {
+            // Boxy but slightly angled front
+            bodyShape.moveTo(-cfg.bodyL/2, 0);
+            bodyShape.lineTo(cfg.bodyL/2, 0);
+            bodyShape.lineTo(cfg.bodyL/2, cfg.bodyH * 0.7);
+            bodyShape.lineTo(cfg.bodyL/2 - 0.4, cfg.bodyH + cfg.cabinH);
+            bodyShape.lineTo(-cfg.bodyL/2, cfg.bodyH + cfg.cabinH);
+            bodyShape.lineTo(-cfg.bodyL/2, 0);
+        } else {
+            // Car / Pickup (Slanted hood and windshield)
+            bodyShape.moveTo(-cfg.bodyL/2, 0);
+            bodyShape.lineTo(cfg.bodyL/2 - 0.2, 0); // front bottom
+            bodyShape.lineTo(cfg.bodyL/2, cfg.bodyH * 0.5); // front bumper slant
+            bodyShape.lineTo(cfg.bodyL/2 - 0.8, cfg.bodyH); // hood slope
+            bodyShape.lineTo(cfg.cabinOffZ + cfg.cabinL/2, cfg.bodyH); // hood to windshield
+            bodyShape.lineTo(cfg.cabinOffZ + cfg.cabinL/2 - 0.6, cfg.bodyH + cfg.cabinH); // windshield
+            bodyShape.lineTo(cfg.cabinOffZ - cfg.cabinL/2, cfg.bodyH + cfg.cabinH); // roof
+            if (type === 'pickup') {
+                bodyShape.lineTo(cfg.cabinOffZ - cfg.cabinL/2, cfg.bodyH); // rear window straight down
+            } else {
+                bodyShape.lineTo(-cfg.bodyL/2 + 0.2, cfg.bodyH); // rear slope down
+            }
+            bodyShape.lineTo(-cfg.bodyL/2, cfg.bodyH * 0.8); // trunk
+            bodyShape.lineTo(-cfg.bodyL/2, 0);
+        }
+
+        const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, extrudeSettings);
+        // Center the extrusion
+        bodyGeo.translate(0, 0, -cfg.bodyW / 2);
+        
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        // Rotate so it lies along Z axis properly. Extrusion puts 'x' and 'y' of shape into X and Y of mesh. Depth is Z.
+        // Wait, Shape X maps to 3D X, Shape Y maps to 3D Y, Extrude depth is along Z.
+        // If we want bodyL to be Z-axis, we must rotate the mesh!
+        body.rotation.y = -Math.PI / 2; 
+        body.position.y = 0.5; // ground clearance
+        body.castShadow = true;
+        this.chassis.add(body);
+
+        // Windows (Glass panels glued to the sides/front)
+        if (type !== 'tank') {
+            const windshieldGeo = new THREE.PlaneGeometry(cfg.bodyW - 0.1, 0.8);
+            const windshield = new THREE.Mesh(windshieldGeo, glassMat);
+            windshield.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + cfg.cabinL/2 - 0.3);
+            windshield.rotation.x = -Math.PI / 4;
+            this.chassis.add(windshield);
+        }
+
+        // Turret for tank
+        if (type === 'tank') {
             const turretGeo = new THREE.CylinderGeometry(0.8, 0.9, 0.5, 8);
             const turret = new THREE.Mesh(turretGeo, darkMat);
             turret.position.set(0, 0.5 + cfg.bodyH + 0.25, -0.3);
             turret.castShadow = true;
-            group.add(turret);
+            this.chassis.add(turret);
 
-            // Barrel
             const barrelGeo = new THREE.CylinderGeometry(0.12, 0.12, 2.5, 8);
-            const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshStandardMaterial({
-                color: 0x555555, roughness: 0.7, metalness: 0.5
-            }));
+            const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.7 }));
             barrel.rotation.x = Math.PI / 2;
             barrel.position.set(0, 0.5 + cfg.bodyH + 0.25, 1.6);
             barrel.castShadow = true;
-            group.add(barrel);
-        } else {
-            const cabinGeo = new THREE.BoxGeometry(cfg.cabinW, cfg.cabinH, cfg.cabinL);
-            const cabin = new THREE.Mesh(cabinGeo, bodyMat);
-            cabin.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ);
-            cabin.castShadow = true;
-            group.add(cabin);
-
-            // Rebar window cages (Mad Max)
-            const rebarMat = darkMat;
-            const rebarGeo = new THREE.CylinderGeometry(0.03, 0.03, cfg.cabinH + 0.05, 4);
-
-            // Front cage
-            for (let i = -1; i <= 1; i++) {
-                const bar = new THREE.Mesh(rebarGeo, rebarMat);
-                bar.position.set(i * 0.3, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + cfg.cabinL / 2);
-                bar.rotation.x = Math.PI * 0.12;
-                group.add(bar);
-            }
-            // Rear cage
-            for (let i = -1; i <= 1; i++) {
-                const bar = new THREE.Mesh(rebarGeo, rebarMat);
-                bar.position.set(i * 0.3, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ - cfg.cabinL / 2);
-                bar.rotation.x = -Math.PI * 0.08;
-                group.add(bar);
-            }
-            // Side cages
-            for (let i = -1; i <= 1; i++) {
-                const barL = new THREE.Mesh(rebarGeo, rebarMat);
-                barL.position.set(-cfg.cabinW/2, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + i * 0.3);
-                group.add(barL);
-
-                const barR = new THREE.Mesh(rebarGeo, rebarMat);
-                barR.position.set(cfg.cabinW/2, 0.5 + cfg.bodyH + cfg.cabinH / 2, cfg.cabinOffZ + i * 0.3);
-                group.add(barR);
-            }
+            this.chassis.add(barrel);
         }
 
-        // ---- Monster Wheels ----
+        // ============================================================
+        // 2. Wheel Suspensions and Steering Pivots
+        // ============================================================
         const wheelR = type === 'tank' ? 0.5 : 0.45;
         const wheelW = type === 'tank' ? 0.4 : 0.3;
-        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 8); // octagonal
+        const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, wheelW, 12);
+        
         const wheelOffX = cfg.bodyW / 2 + wheelW / 2 + 0.05;
         const wheelZ1 = cfg.bodyL * 0.35;
         const wheelZ2 = -cfg.bodyL * 0.35;
 
-        const wheelPositions = [
-            [-wheelOffX, wheelR, wheelZ1],
-            [wheelOffX, wheelR, wheelZ1],
-            [-wheelOffX, wheelR, wheelZ2],
-            [wheelOffX, wheelR, wheelZ2]
-        ];
+        // Visual Axles
+        const axleGeo = new THREE.CylinderGeometry(0.08, 0.08, cfg.bodyW + 0.4, 6);
+        [wheelZ1, wheelZ2].forEach(wz => {
+            const axle = new THREE.Mesh(axleGeo, darkMat);
+            axle.position.set(0, wheelR, wz);
+            axle.rotation.z = Math.PI / 2;
+            this.chassis.add(axle); // axles stay with chassis
+        });
 
-        // Rusty iron hubcaps
-        const rimGeo = new THREE.CylinderGeometry(wheelR * 0.5, wheelR * 0.5, wheelW + 0.04, 6);
-        const rimMat = darkMat;
-
+        // Wheel meshes
         this.wheels = [];
-        wheelPositions.forEach(([wx, wy, wz]) => {
+        this.frontWheels = [];
+        this.rearWheels = [];
+        const rimGeo = new THREE.CylinderGeometry(wheelR * 0.5, wheelR * 0.5, wheelW + 0.04, 6);
+
+        [
+            [-wheelOffX, wheelR, wheelZ1, true],
+            [wheelOffX, wheelR, wheelZ1, true],
+            [-wheelOffX, wheelR, wheelZ2, false],
+            [wheelOffX, wheelR, wheelZ2, false]
+        ].forEach(([wx, wy, wz, isFront]) => {
+            const pivot = new THREE.Group();
+            pivot.position.set(wx, wy, wz);
+            
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-            wheel.position.set(wx, wy, wz);
             wheel.rotation.z = Math.PI / 2;
             wheel.castShadow = true;
             
-            const rim = new THREE.Mesh(rimGeo, rimMat);
-            wheel.add(rim); // rim rotates with wheel
+            const rim = new THREE.Mesh(rimGeo, darkMat);
+            rim.rotation.z = Math.PI / 2; 
+            wheel.add(rim);
             
-            group.add(wheel);
+            pivot.add(wheel);
+            group.add(pivot); // Pivots stay in root group so they don't lean with chassis
+            
             this.wheels.push(wheel);
+            if (isFront) {
+                this.frontWheels.push(pivot);
+            } else {
+                this.rearWheels.push(pivot);
+            }
         });
 
-        // ---- Headlights ----
+        // ============================================================
+        // 3. Advanced Lighting (Headlights & Underglow)
+        // ============================================================
         const hlGeo = new THREE.SphereGeometry(0.1, 6, 6);
         const frontZ = cfg.bodyL / 2;
         [-cfg.bodyW * 0.35, cfg.bodyW * 0.35].forEach(hx => {
             const hl = new THREE.Mesh(hlGeo, headlightMat);
             hl.position.set(hx, 0.5 + cfg.bodyH * 0.5, frontZ);
-            group.add(hl);
+            this.chassis.add(hl);
+
+            // True SpotLight
+            const spot = new THREE.SpotLight(0xffffdd, 2.0, 50, Math.PI / 5, 0.5, 1);
+            spot.position.copy(hl.position);
+            
+            const target = new THREE.Object3D();
+            target.position.set(hx, 0.5, frontZ + 20);
+            this.chassis.add(target);
+            spot.target = target;
+
+            // Only local car casts headlight shadows to save massive performance
+            if (this.isLocal) {
+                spot.castShadow = true;
+                spot.shadow.mapSize.width = 512;
+                spot.shadow.mapSize.height = 512;
+            }
+            this.chassis.add(spot);
         });
 
-        // ---- Taillights ----
+        // Taillights
         const tlGeo = new THREE.BoxGeometry(0.25, 0.12, 0.06);
         const rearZ = -cfg.bodyL / 2;
         [-cfg.bodyW * 0.35, cfg.bodyW * 0.35].forEach(tx => {
             const tl = new THREE.Mesh(tlGeo, taillightMat);
             tl.position.set(tx, 0.5 + cfg.bodyH * 0.4, rearZ);
-            group.add(tl);
+            this.chassis.add(tl);
         });
 
-        // ============================================================
-        // MAD MAX WEDGE (COW CATCHER) & GIANT SPIKES
-        // ============================================================
-        const plowMat = new THREE.MeshStandardMaterial({
-            color: 0x222222, metalness: 0.9, roughness: 0.7
-        });
-        const plowGeo = new THREE.CylinderGeometry(0.8, 0.8, cfg.bodyW + 0.4, 3);
-        const plow = new THREE.Mesh(plowGeo, plowMat);
-        plow.rotation.z = Math.PI / 2; // horizontal
-        plow.rotation.x = Math.PI / 5; // angle slope down
-        plow.position.set(0, 0.35, frontZ + 0.6);
-        plow.castShadow = true;
-        group.add(plow);
-
-        // Giant Spikes protruding from the plow
-        const spikeCount = type === 'tank' ? 5 : 3;
-        const spikeSpacing = (cfg.bodyW * 0.8) / (spikeCount - 1);
-        const startX = -cfg.bodyW * 0.4;
-        const spikeLen = 1.4; // Massive spikes
-        const spikeGeo = new THREE.ConeGeometry(0.12, spikeLen, 6);
-        const spikeMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.3 });
+        // Neon Underglow
+        const underglow = new THREE.PointLight(color, 2.0, 8);
+        underglow.position.set(0, 0.3, 0);
+        this.chassis.add(underglow);
         
-        for (let s = 0; s < spikeCount; s++) {
-            const spike = new THREE.Mesh(spikeGeo, spikeMat);
-            spike.rotation.x = Math.PI / 2;
-            spike.position.set(
-                startX + s * spikeSpacing,
-                0.35,
-                frontZ + 0.6 + spikeLen / 2
-            );
-            spike.castShadow = true;
-            group.add(spike);
-        }
-
-        // Rear Bumper (Thick iron bar)
-        const rbGeo = new THREE.BoxGeometry(cfg.bodyW + 0.1, 0.2, 0.3);
-        const rearBumper = new THREE.Mesh(rbGeo, plowMat);
-        rearBumper.position.set(0, 0.35, rearZ - 0.1);
-        rearBumper.castShadow = true;
-        group.add(rearBumper);
+        const glowGeo = new THREE.PlaneGeometry(cfg.bodyW * 0.8, cfg.bodyL * 0.7);
+        const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+        const glowPlane = new THREE.Mesh(glowGeo, glowMat);
+        glowPlane.rotation.x = -Math.PI / 2;
+        glowPlane.position.set(0, 0.05, 0);
+        this.chassis.add(glowPlane);
 
         // ============================================================
-        // SIDE SKIRTS
+        // 4. Attachments & Exhaust
         // ============================================================
-        const skirtGeo = new THREE.BoxGeometry(0.08, 0.12, cfg.bodyL * 0.7);
-        [-cfg.bodyW / 2 - 0.04, cfg.bodyW / 2 + 0.04].forEach(sx => {
-            const skirt = new THREE.Mesh(skirtGeo, darkMat);
-            skirt.position.set(sx, 0.35, 0);
-            group.add(skirt);
-        });
-
-        // ============================================================
-        // DIESEL SMOKESTACKS
-        // ============================================================
-        const exhaustMat = new THREE.MeshStandardMaterial({
-            color: 0x333333, metalness: 0.8, roughness: 0.6
-        });
+        this.exhaustPipes = [];
+        const exhaustMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
         const exCount = type === 'tank' ? 1 : 2;
         const exPositions = exCount === 1 ? [0] : [-cfg.bodyW * 0.4, cfg.bodyW * 0.4];
         exPositions.forEach(ex => {
             const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
             const pipe = new THREE.Mesh(pipeGeo, exhaustMat);
-            pipe.position.set(ex, 0.5 + cfg.bodyH + 0.3, frontZ - 0.2);
+            pipe.position.set(ex, 0.5 + cfg.bodyH + 0.3, frontZ - 0.6);
             pipe.castShadow = true;
-            group.add(pipe);
+            this.chassis.add(pipe);
+            this.exhaustPipes.push(pipe);
         });
 
-        // ============================================================
-        // SIDE MIRRORS (not for tank)
-        // ============================================================
-        if (type !== 'tank') {
-            const mirrorMat = new THREE.MeshStandardMaterial({
-                color: 0x333333, metalness: 0.7, roughness: 0.2
-            });
-            [-1, 1].forEach(side => {
-                // Mirror arm
-                const armGeo = new THREE.BoxGeometry(0.3, 0.04, 0.04);
-                const arm = new THREE.Mesh(armGeo, mirrorMat);
-                arm.position.set(
-                    side * (cfg.bodyW / 2 + 0.15),
-                    0.5 + cfg.bodyH + 0.1,
-                    cfg.cabinOffZ + cfg.cabinL * 0.3
-                );
-                group.add(arm);
+        // Cow Catcher / Plow
+        const plowMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9, roughness: 0.7 });
+        const plowGeo = new THREE.CylinderGeometry(0.8, 0.8, cfg.bodyW + 0.4, 3);
+        const plow = new THREE.Mesh(plowGeo, plowMat);
+        plow.rotation.z = Math.PI / 2;
+        plow.rotation.x = Math.PI / 5;
+        plow.position.set(0, 0.35, frontZ + 0.6);
+        plow.castShadow = true;
+        this.chassis.add(plow);
 
-                // Mirror glass
-                const glassGeo = new THREE.BoxGeometry(0.04, 0.12, 0.1);
-                const glass = new THREE.Mesh(glassGeo, glassMat);
-                glass.position.set(
-                    side * (cfg.bodyW / 2 + 0.28),
-                    0.5 + cfg.bodyH + 0.1,
-                    cfg.cabinOffZ + cfg.cabinL * 0.3
-                );
-                group.add(glass);
-            });
+        const spikeLen = 1.4;
+        const spikeGeo = new THREE.ConeGeometry(0.12, spikeLen, 6);
+        for (let s = 0; s < 3; s++) {
+            const spike = new THREE.Mesh(spikeGeo, darkMat);
+            spike.rotation.x = Math.PI / 2;
+            spike.position.set(-cfg.bodyW * 0.4 + s * (cfg.bodyW * 0.4), 0.35, frontZ + 0.6 + spikeLen / 2);
+            spike.castShadow = true;
+            this.chassis.add(spike);
         }
-
-        // ============================================================
-        // VEHICLE-SPECIFIC DETAILS
-        // ============================================================
-        if (type === 'car') {
-            // Racing Spoiler
-            const spoilerMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-            const spoilerGeo = new THREE.BoxGeometry(cfg.bodyW * 0.95, 0.05, 0.25);
-            const spoiler = new THREE.Mesh(spoilerGeo, spoilerMat);
-            spoiler.position.set(0, 0.5 + cfg.bodyH + 0.2, rearZ + 0.15);
-            spoiler.castShadow = true;
-            group.add(spoiler);
-            
-            const supGeo = new THREE.BoxGeometry(0.04, 0.2, 0.1);
-            [-cfg.bodyW * 0.3, cfg.bodyW * 0.3].forEach(sx => {
-                const sup = new THREE.Mesh(supGeo, spoilerMat);
-                sup.position.set(sx, 0.5 + cfg.bodyH + 0.1, rearZ + 0.15);
-                group.add(sup);
-            });
-        }
-
-        if (type === 'pickup') {
-            // Roof-mounted light bar
-            const lbGeo = new THREE.BoxGeometry(cfg.cabinW * 0.8, 0.08, 0.15);
-            const lbMat = new THREE.MeshStandardMaterial({
-                color: 0xffaa00, emissive: 0xffaa00, emissiveIntensity: 0.3
-            });
-            const lightBar = new THREE.Mesh(lbGeo, lbMat);
-            lightBar.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH + 0.04, cfg.cabinOffZ);
-            group.add(lightBar);
-
-            // Cargo bed rails
-            const railMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.6 });
-            [-cfg.bodyW * 0.45, cfg.bodyW * 0.45].forEach(rx => {
-                const railGeo = new THREE.BoxGeometry(0.05, 0.3, cfg.bodyL * 0.35);
-                const rail = new THREE.Mesh(railGeo, railMat);
-                rail.position.set(rx, 0.5 + cfg.bodyH + 0.15, -cfg.bodyL * 0.25);
-                group.add(rail);
-            });
-        }
-
-        if (type === 'van') {
-            // Luggage rack on top
-            const rackMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 });
-            const rackGeo = new THREE.BoxGeometry(cfg.cabinW * 0.7, 0.04, cfg.cabinL * 0.8);
-            const rack = new THREE.Mesh(rackGeo, rackMat);
-            rack.position.set(0, 0.5 + cfg.bodyH + cfg.cabinH + 0.08, cfg.cabinOffZ);
-            group.add(rack);
-
-            // Rack supports
-            const supportGeo2 = new THREE.BoxGeometry(0.04, 0.12, 0.04);
-            [[-0.6, 0.5], [0.6, 0.5], [-0.6, -0.5], [0.6, -0.5]].forEach(([sx, sz]) => {
-                const sup = new THREE.Mesh(supportGeo2, rackMat);
-                sup.position.set(sx, 0.5 + cfg.bodyH + cfg.cabinH + 0.02, cfg.cabinOffZ + sz);
-                group.add(sup);
-            });
-        }
-
-        if (type === 'tank') {
-            // Extra armor plates on sides
-            const armorMat = new THREE.MeshStandardMaterial({
-                color: 0x445544, metalness: 0.3, roughness: 0.7
-            });
-            [-1, 1].forEach(side => {
-                const plateGeo = new THREE.BoxGeometry(0.12, cfg.bodyH * 0.6, cfg.bodyL * 0.4);
-                const plate = new THREE.Mesh(plateGeo, armorMat);
-                plate.position.set(side * (cfg.bodyW / 2 + 0.06), 0.5 + cfg.bodyH * 0.5, 0);
-                plate.castShadow = true;
-                group.add(plate);
-            });
-
-            // Track guards
-            [-cfg.bodyW / 2, cfg.bodyW / 2].forEach(tx => {
-                const guardGeo = new THREE.BoxGeometry(0.5, 0.1, cfg.bodyL + 0.2);
-                const guard = new THREE.Mesh(guardGeo, darkMat);
-                guard.position.set(tx, 0.5 + cfg.bodyH + 0.05, 0);
-                group.add(guard);
-            });
-        }
-
-        // ============================================================
-        // UNDERCARRIAGE GLOW (neon effect)
-        // ============================================================
-        const glowGeo = new THREE.PlaneGeometry(cfg.bodyW * 0.8, cfg.bodyL * 0.7);
-        const glowMat = new THREE.MeshBasicMaterial({
-            color, transparent: true, opacity: 0.15, side: THREE.DoubleSide
-        });
-        const glow = new THREE.Mesh(glowGeo, glowMat);
-        glow.rotation.x = -Math.PI / 2;
-        glow.position.set(0, 0.05, 0);
-        group.add(glow);
 
         return group;
     }
@@ -545,11 +463,12 @@ export class Car {
         }
 
         // Turning (only when moving, scales with speed)
+        let steerInput = 0;
         if (Math.abs(this.speed) > 1) {
             const turnDir = this.speed > 0 ? 1 : -1;
             const speedFactor = Math.min(1, Math.abs(this.speed) / 15);
-            if (input.left)  this.angle += cfg.turnSpeed * turnDir * speedFactor * dt;
-            if (input.right) this.angle -= cfg.turnSpeed * turnDir * speedFactor * dt;
+            if (input.left)  { this.angle += cfg.turnSpeed * turnDir * speedFactor * dt; steerInput = 1; }
+            if (input.right) { this.angle -= cfg.turnSpeed * turnDir * speedFactor * dt; steerInput = -1; }
         }
 
         // Update position
@@ -565,19 +484,20 @@ export class Car {
             this.bounce.z *= Math.pow(0.005, dt);
         }
 
-        // Spin wheels
-        const wheelSpin = this.speed * dt * 2;
-        this.wheels.forEach(w => { w.rotation.x += wheelSpin; });
+        // Animate visuals (local car)
+        this._animateCarVisuals(this.speed, steerInput, input.forward, input.backward, dt);
     }
 
     // ========================================================================
     // Interpolation (remote cars)
     // ========================================================================
 
-    updateFromServer(x, z, angle) {
+    updateFromServer(x, z, angle, speed, steer) {
         this.targetX = x;
         this.targetZ = z;
         this.targetAngle = angle;
+        this.targetSpeed = speed || 0;
+        this.targetSteer = steer || 0;
     }
 
     interpolate(factor) {
@@ -591,11 +511,63 @@ export class Car {
         while (diff < -Math.PI) diff += Math.PI * 2;
         this.group.rotation.y += diff * f;
 
-        // Spin wheels based on movement
-        const dx = this.targetX - this.group.position.x;
-        const dz = this.targetZ - this.group.position.z;
-        const moveDist = Math.sqrt(dx * dx + dz * dz);
-        this.wheels.forEach(w => { w.rotation.x += moveDist * 0.5; });
+        // Animate visuals for remote cars
+        // Estimate speed from movement or use server target
+        const estSpeed = this.targetSpeed !== undefined ? this.targetSpeed : diff * 10; 
+        const estSteer = this.targetSteer !== undefined ? this.targetSteer : 0;
+        this._animateCarVisuals(estSpeed, estSteer, estSpeed > 5, estSpeed < -5, 0.016);
+    }
+
+    _animateCarVisuals(speed, steerInput, isAccel, isBraking, dt) {
+        // Spin wheels
+        const wheelSpin = speed * dt * 1.5;
+        this.wheels.forEach(w => { w.rotation.x += wheelSpin; });
+
+        // Steer front wheels
+        const maxSteer = Math.PI / 5;
+        this.frontWheels.forEach(fw => {
+            fw.rotation.y += (steerInput * maxSteer - fw.rotation.y) * 0.15;
+        });
+
+        // Chassis tilt/lean
+        if (this.chassis) {
+            // Lean forward/back based on accel/brake
+            let targetPitch = 0;
+            if (isAccel) targetPitch = -0.05; // nose up
+            if (isBraking) targetPitch = 0.08; // nose down
+            this.chassis.rotation.x += (targetPitch - this.chassis.rotation.x) * 0.1;
+
+            // Lean left/right based on steering
+            const targetRoll = steerInput * (speed / this.cfg.maxSpeed) * 0.12;
+            this.chassis.rotation.z += (targetRoll - this.chassis.rotation.z) * 0.1;
+        }
+
+        // Particle Emission
+        if (window.particleSystem) {
+            // Tire dirt trails
+            if (Math.abs(speed) > 10) {
+                // Determine if on dirt/wasteland
+                const intensity = Math.abs(speed) / this.cfg.maxSpeed;
+                if (Math.random() < intensity * 0.6) {
+                    this.rearWheels.forEach(rw => {
+                        const wPos = new THREE.Vector3();
+                        rw.getWorldPosition(wPos);
+                        wPos.y = 0.2; // ground level
+                        window.particleSystem.spawnDust(wPos, null, Math.abs(speed));
+                    });
+                }
+            }
+
+            // Exhaust smoke
+            if (this.exhaustPipes && isAccel && Math.random() < 0.4) {
+                this.exhaustPipes.forEach(ep => {
+                    const exPos = new THREE.Vector3();
+                    ep.getWorldPosition(exPos);
+                    exPos.y += 0.8;
+                    window.particleSystem.spawnExhaustSmoke(exPos, 1);
+                });
+            }
+        }
     }
 
     // ========================================================================
