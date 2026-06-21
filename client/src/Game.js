@@ -7,6 +7,7 @@ import { Car, VEHICLE_CONFIGS, colorHexToIndex } from './Car.js';
 import { Network, toServer } from './Network.js';
 import { HUD } from './HUD.js';
 import { ParticleSystem } from './Particles.js';
+import { Settings } from './Settings.js';
 
 export class Game {
     constructor(container, playerName, vehicleType) {
@@ -110,12 +111,14 @@ export class Game {
         const delta = this.clock.getDelta();
 
         // 1. Input → physics (local car)
-        if (!this.isDead) {
+        if (!this.isDead && this.player) {
+            const config = this.hud.config;
+            const isDown = (action) => config.keys[action].some(key => this.keys[key]);
             const input = {
-                forward:  this.keys['KeyW'] || this.keys['ArrowUp'],
-                backward: this.keys['KeyS'] || this.keys['ArrowDown'],
-                left:     this.keys['KeyA'] || this.keys['ArrowLeft'],
-                right:    this.keys['KeyD'] || this.keys['ArrowRight']
+                forward:  isDown('forward'),
+                backward: isDown('backward'),
+                left:     isDown('left'),
+                right:    isDown('right')
             };
             this.player.updatePhysics(input, delta);
 
@@ -294,35 +297,43 @@ export class Game {
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isTouch) {
             const mc = document.getElementById('mobile-controls');
-            if (mc) mc.style.display = 'block';
+            if (mc) {
+                mc.style.display = 'block';
+                this.hud._applyMobileLayout(false); // Apply saved layout and scale
+            }
 
-            const bindBtn = (id, key) => {
+            const bindBtn = (id, action) => {
                 const btn = document.getElementById(id);
                 if (!btn) return;
                 
-                // Touch events
+                // We use a dummy key code to map the mobile buttons to the config actions.
+                // We'll just set the first mapped key of that action to true.
+                const setAction = (state) => {
+                    const mappedKey = this.hud.config.keys[action][0];
+                    if (mappedKey) this.keys[mappedKey] = state;
+                };
+
                 btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault(); // prevent zoom/scroll
-                    this.keys[key] = true;
+                    e.preventDefault();
+                    setAction(true);
                 }, { passive: false });
                 btn.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    this.keys[key] = false;
+                    setAction(false);
                 }, { passive: false });
                 btn.addEventListener('touchcancel', (e) => {
-                    this.keys[key] = false;
+                    setAction(false);
                 });
 
-                // Mouse fallback for testing
-                btn.addEventListener('mousedown', (e) => { this.keys[key] = true; });
-                btn.addEventListener('mouseup', (e) => { this.keys[key] = false; });
-                btn.addEventListener('mouseleave', (e) => { this.keys[key] = false; });
+                btn.addEventListener('mousedown', (e) => { setAction(true); });
+                btn.addEventListener('mouseup', (e) => { setAction(false); });
+                btn.addEventListener('mouseleave', (e) => { setAction(false); });
             };
 
-            bindBtn('btn-up', 'ArrowUp');
-            bindBtn('btn-down', 'ArrowDown');
-            bindBtn('btn-left', 'ArrowLeft');
-            bindBtn('btn-right', 'ArrowRight');
+            bindBtn('btn-up', 'forward');
+            bindBtn('btn-down', 'backward');
+            bindBtn('btn-left', 'left');
+            bindBtn('btn-right', 'right');
         }
     }
 

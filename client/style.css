@@ -819,8 +819,8 @@ body {
 }
 
 .mc-btn:active {
-  background: rgba(0, 255, 255, 0.4);
-  transform: scale(0.95);
+  background: var(--theme-accent, rgba(0, 255, 255, 0.4));
+  filter: brightness(0.8);
 }
 
 #mc-steer {

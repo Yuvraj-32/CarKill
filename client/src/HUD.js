@@ -2,6 +2,8 @@
 // HUD.js — HTML overlay HUD (manipulates DOM elements from index.html)
 // ============================================================================
 
+import { Settings } from './Settings.js';
+
 export class HUD {
     constructor() {
         // Cache DOM elements
@@ -27,14 +29,27 @@ export class HUD {
             winnerBanner:    document.getElementById('winner-banner'),
             winnerName:      document.getElementById('winner-name'),
             winnerKills:     document.getElementById('winner-kills'),
-            themeLabel:      document.getElementById('theme-label')
+            themeLabel:      document.getElementById('theme-label'),
+            // Settings
+            settingsBtn:     document.getElementById('settings-btn'),
+            settingsModal:   document.getElementById('settings-modal'),
+            closeSettingsBtn:document.getElementById('close-settings-btn'),
+            keybindBtns:     document.querySelectorAll('.keybind-btn'),
+            keybindHint:     document.getElementById('keybind-hint'),
+            editLayoutBtn:   document.getElementById('edit-layout-btn'),
+            uiEditOverlay:   document.getElementById('ui-edit-overlay'),
+            saveLayoutBtn:   document.getElementById('save-layout-btn'),
+            uiScaleSlider:   document.getElementById('ui-scale-slider')
         };
 
         this.localPlayerId = null;
         this.killMessages = [];
         this.selectedShopVehicle = 'car';
         this.onRespawnCallback = null;
+        
+        this.config = Settings.load();
         this._setupShop();
+        this._setupSettings();
     }
 
     show() {
@@ -303,6 +318,172 @@ export class HUD {
         // Default selection
         const firstCard = document.querySelector('.vehicle-card');
         if (firstCard) firstCard.classList.add('selected');
+    }
+
+    // ---- Settings ----
+    _setupSettings() {
+        if (!this.els.settingsBtn) return;
+
+        let activeActionBinding = null;
+
+        const updateKeybindLabels = () => {
+            this.els.keybindBtns.forEach(btn => {
+                const action = btn.dataset.action;
+                if (this.config.keys[action]) {
+                    btn.textContent = this.config.keys[action].join(' / ');
+                }
+            });
+        };
+
+        this.els.settingsBtn.addEventListener('click', () => {
+            updateKeybindLabels();
+            this.els.settingsModal.style.display = 'flex';
+        });
+
+        this.els.closeSettingsBtn.addEventListener('click', () => {
+            this.els.settingsModal.style.display = 'none';
+            Settings.save(this.config);
+            activeActionBinding = null;
+            this.els.keybindHint.textContent = '';
+        });
+
+        // Keybinding clicks
+        this.els.keybindBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeActionBinding = btn.dataset.action;
+                btn.textContent = 'Press any key...';
+                this.els.keybindHint.textContent = 'Press a key to bind it to ' + activeActionBinding.toUpperCase();
+            });
+        });
+
+        // Keybinding capture
+        window.addEventListener('keydown', (e) => {
+            if (activeActionBinding) {
+                // Remove from current binding
+                this.config.keys[activeActionBinding] = [e.code]; // Overwrite with new single key, or we could push
+                updateKeybindLabels();
+                this.els.keybindHint.textContent = 'Bound ' + activeActionBinding.toUpperCase() + ' to ' + e.code;
+                activeActionBinding = null;
+            }
+        });
+
+        // Mobile Layout Edit
+        this.els.editLayoutBtn.addEventListener('click', () => {
+            this.els.settingsModal.style.display = 'none';
+            this.els.uiEditOverlay.style.display = 'block';
+            
+            // Show mobile controls temporarily so they can be dragged
+            const mc = document.getElementById('mobile-controls');
+            if (mc) {
+                mc.style.display = 'block';
+                mc.style.pointerEvents = 'auto'; // allow dragging
+            }
+            this.els.uiScaleSlider.value = this.config.mobileLayout.btnLeft.scale || 1;
+            
+            // Apply current positions to buttons directly for dragging
+            this._applyMobileLayout(true);
+        });
+
+        this.els.uiScaleSlider.addEventListener('input', (e) => {
+            const scale = parseFloat(e.target.value);
+            ['btnLeft', 'btnRight', 'btnUp', 'btnDown'].forEach(key => {
+                this.config.mobileLayout[key].scale = scale;
+            });
+            this._applyMobileLayout(true);
+        });
+
+        this.els.saveLayoutBtn.addEventListener('click', () => {
+            this.els.uiEditOverlay.style.display = 'none';
+            this.els.settingsModal.style.display = 'flex'; // Go back to settings
+            Settings.save(this.config);
+            
+            const mc = document.getElementById('mobile-controls');
+            if (mc) mc.style.pointerEvents = 'none'; // reset
+        });
+
+        this._setupDraggableButtons();
+    }
+
+    _applyMobileLayout(isEditing) {
+        const mapping = {
+            'btn-left': 'btnLeft',
+            'btn-right': 'btnRight',
+            'btn-up': 'btnUp',
+            'btn-down': 'btnDown'
+        };
+        
+        for (const [id, key] of Object.entries(mapping)) {
+            const btn = document.getElementById(id);
+            if (!btn) continue;
+            
+            const layout = this.config.mobileLayout[key];
+            if (layout) {
+                btn.style.position = 'fixed';
+                btn.style.left = layout.x + 'vw';
+                btn.style.top = layout.y + 'vh';
+                btn.style.bottom = 'auto';
+                btn.style.right = 'auto';
+                btn.style.transform = `translate(-50%, -50%) scale(${layout.scale || 1})`;
+                if (isEditing) {
+                    btn.style.boxShadow = '0 0 15px rgba(255,0,0,0.8)';
+                } else {
+                    btn.style.boxShadow = '';
+                }
+            }
+        }
+    }
+
+    _setupDraggableButtons() {
+        const btns = ['btn-left', 'btn-right', 'btn-up', 'btn-down'];
+        
+        btns.forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            
+            let isDragging = false;
+            
+            const startDrag = (e) => {
+                if (this.els.uiEditOverlay.style.display !== 'block') return;
+                isDragging = true;
+                e.preventDefault();
+            };
+            
+            const moveDrag = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                let clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                
+                if (clientX !== undefined && clientY !== undefined) {
+                    // Convert to vw/vh
+                    const vw = (clientX / window.innerWidth) * 100;
+                    const vh = (clientY / window.innerHeight) * 100;
+                    
+                    const mapping = {
+                        'btn-left': 'btnLeft',
+                        'btn-right': 'btnRight',
+                        'btn-up': 'btnUp',
+                        'btn-down': 'btnDown'
+                    };
+                    const key = mapping[id];
+                    this.config.mobileLayout[key].x = vw;
+                    this.config.mobileLayout[key].y = vh;
+                    
+                    this._applyMobileLayout(true);
+                }
+            };
+            
+            const endDrag = () => { isDragging = false; };
+            
+            btn.addEventListener('mousedown', startDrag);
+            btn.addEventListener('touchstart', startDrag, { passive: false });
+            
+            window.addEventListener('mousemove', moveDrag);
+            window.addEventListener('touchmove', moveDrag, { passive: false });
+            
+            window.addEventListener('mouseup', endDrag);
+            window.addEventListener('touchend', endDrag);
+        });
     }
 
     // ---- Utility ----
