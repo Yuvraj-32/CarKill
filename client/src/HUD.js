@@ -370,6 +370,7 @@ export class HUD {
         // Mobile Layout Edit
         this.els.editLayoutBtn.addEventListener('click', () => {
             this.els.settingsModal.style.display = 'none';
+            this.els.menu.style.display = 'none'; // Hide menu to see the map
             this.els.uiEditOverlay.style.display = 'block';
             this.els.hud.style.zIndex = '500'; // Elevate entire HUD above edit overlay
             
@@ -395,6 +396,7 @@ export class HUD {
 
         this.els.saveLayoutBtn.addEventListener('click', () => {
             this.els.uiEditOverlay.style.display = 'none';
+            this.els.menu.style.display = 'flex'; // Restore menu
             this.els.settingsModal.style.display = 'flex'; // Go back to settings
             this.els.hud.style.zIndex = ''; // Reset HUD z-index
             Settings.save(this.config);
