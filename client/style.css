@@ -787,56 +787,278 @@ body {
 }
 
 /* ============================================================================
-   MOBILE CONTROLS
+   MOBILE CONTROLS — Draggable buttons
    ============================================================================ */
 
 #mobile-controls {
   display: none;
-  position: absolute;
-  bottom: 80px;
-  left: 0;
-  width: 100%;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   pointer-events: none;
   z-index: 50;
 }
 
 .mc-btn {
-  width: 65px;
-  height: 65px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 2px solid rgba(0, 255, 255, 0.4);
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   color: #fff;
-  font-size: 24px;
+  font-size: 26px;
   pointer-events: auto;
   user-select: none;
   touch-action: none;
   display: flex;
   justify-content: center;
   align-items: center;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.1s, border-color 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 .mc-btn:active {
-  background: rgba(0, 255, 255, 0.4);
-  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(0.93);
 }
 
-#mc-steer {
-  position: absolute;
-  bottom: 0;
-  left: 30px;
-  display: flex;
-  gap: 15px;
+/* Brake button — square/distinct */
+#btn-brake {
+  background: rgba(160, 30, 30, 0.45);
+  border-color: rgba(255, 80, 80, 0.4);
+  font-size: 18px;
+  letter-spacing: 0;
 }
 
-#mc-drive {
-  position: absolute;
-  bottom: 0;
-  right: 30px;
+#btn-brake:active {
+  background: rgba(220, 50, 50, 0.6);
+}
+
+/* Edit Mode — buttons jiggle to indicate they're draggable */
+#mobile-controls.edit-mode .mc-btn {
+  animation: btn-wiggle 0.5s ease-in-out infinite alternate;
+  border-color: rgba(255, 210, 0, 0.7);
+  background: rgba(50, 40, 0, 0.6);
+  cursor: grab;
+}
+
+#mobile-controls.edit-mode .mc-btn.dragging {
+  animation: none;
+  opacity: 0.7;
+  transform: scale(1.15);
+  cursor: grabbing;
+}
+
+@keyframes btn-wiggle {
+  from { transform: rotate(-4deg); }
+  to   { transform: rotate(4deg); }
+}
+
+/* Settings cog — floating button (mobile only) */
+#ctrl-settings-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 22px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 60;
+  pointer-events: auto;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+#ctrl-settings-btn:active {
+  background: rgba(255,255,255,0.15);
+}
+
+/* Edit hint bar */
+#ctrl-edit-hint {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(180, 150, 0, 0.85);
+  color: #111;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 8px 18px;
+  border-radius: 30px;
+  pointer-events: none;
+  z-index: 61;
+}
+
+/* Done button */
+#ctrl-done-btn {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--theme-accent, #7777cc);
+  color: #111;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  padding: 12px 36px;
+  border: none;
+  border-radius: 8px;
+  z-index: 61;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ============================================================================
+   CONTROL PANEL OVERLAY
+   ============================================================================ */
+
+#ctrl-panel-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 300;
   display: flex;
-  gap: 15px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#ctrl-panel-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#ctrl-panel-box {
+  background: rgba(15, 15, 15, 0.85);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 20px;
+  width: min(92vw, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#ctrl-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#ctrl-panel-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fff;
+}
+
+#ctrl-panel-close {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  color: #aaa;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#ctrl-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ctrl-preset-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.18s;
+  user-select: none;
+}
+
+.ctrl-preset-card:active,
+.ctrl-preset-card.active {
+  border-color: var(--theme-accent, #7777cc);
+  background: rgba(255,255,255,0.12);
+}
+
+.ctrl-preset-icon {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.ctrl-preset-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.ctrl-preset-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: #888;
+}
+
+#ctrl-panel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+#ctrl-panel-actions button {
+  flex: 1;
+  padding: 11px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  color: #ddd;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#ctrl-panel-actions button:active {
+  background: rgba(255,255,255,0.15);
+}
+
+#ctrl-edit-btn {
+  border-color: rgba(255, 200, 0, 0.4) !important;
+  color: #ffcc00 !important;
 }
 
 /* Landscape Hint for Mobile */

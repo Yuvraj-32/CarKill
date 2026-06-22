@@ -3,6 +3,7 @@
 // ============================================================================
 import { Game } from './Game.js';
 import { HUD } from './HUD.js';
+import { MobileControls } from './MobileControls.js';
 
 let game = null;
 
@@ -15,6 +16,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const themes = ['wasteland', 'toxic', 'storm'];
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     hud.setUITheme(randomTheme);
+
+    // Initialize mobile controls on the menu screen too (touch devices only)
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isTouch) {
+        // Use a dummy keys object — inputs don't matter on menu, just need the panel
+        const dummyKeys = {};
+        const menuControls = new MobileControls(dummyKeys);
+        menuControls.bindPanelEvents();
+        // Show cog button on menu
+        const cogBtn = document.getElementById('ctrl-settings-btn');
+        if (cogBtn) cogBtn.style.display = 'flex';
+    }
 
     hud.setupMenuHandlers((playerName, vehicleType) => {
         // Hide menu

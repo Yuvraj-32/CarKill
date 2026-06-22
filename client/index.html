@@ -66,17 +66,15 @@
       <span>WASD</span> / <span>↑↓←→</span> to drive
     </div>
 
-    <!-- Mobile Controls (hidden on desktop) -->
-    <div id="mobile-controls">
-      <div id="mc-steer">
-        <button id="btn-left" class="mc-btn">◀</button>
-        <button id="btn-right" class="mc-btn">▶</button>
-      </div>
-      <div id="mc-drive">
-        <button id="btn-down" class="mc-btn">▼</button>
-        <button id="btn-up" class="mc-btn">▲</button>
-      </div>
-    </div>
+    <!-- Mobile Controls (hidden on desktop, built by MobileControls.js) -->
+    <div id="mobile-controls"></div>
+
+    <!-- Mobile settings cog — opens control panel -->
+    <button id="ctrl-settings-btn">⚙</button>
+
+    <!-- Edit mode hint & Done button -->
+    <div id="ctrl-edit-hint">Drag buttons to reposition</div>
+    <button id="ctrl-done-btn">✓ DONE</button>
   </div>
 
   <!-- ========== DEATH OVERLAY + VEHICLE SHOP ========== -->
@@ -128,6 +126,44 @@
     <div id="winner-name">Player</div>
     <div id="winner-kills">0 KILLS</div>
     <div id="winner-subtitle">New round starting...</div>
+  </div>
+
+  <!-- ========== CONTROL PANEL OVERLAY ========== -->
+  <div id="ctrl-panel-overlay">
+    <div id="ctrl-panel-box">
+      <div id="ctrl-panel-header">
+        <span id="ctrl-panel-title">🎮 BUTTON LAYOUT</span>
+        <button id="ctrl-panel-close">✕</button>
+      </div>
+
+      <div id="ctrl-preset-grid">
+        <div class="ctrl-preset-card active" data-preset="classic">
+          <div class="ctrl-preset-icon">⬜</div>
+          <div class="ctrl-preset-name">CLASSIC</div>
+          <div class="ctrl-preset-desc">Standard split layout</div>
+        </div>
+        <div class="ctrl-preset-card" data-preset="thumbs">
+          <div class="ctrl-preset-icon">👍</div>
+          <div class="ctrl-preset-name">WIDE</div>
+          <div class="ctrl-preset-desc">Far corners for big thumbs</div>
+        </div>
+        <div class="ctrl-preset-card" data-preset="lefty">
+          <div class="ctrl-preset-icon">🤚</div>
+          <div class="ctrl-preset-name">LEFT HAND</div>
+          <div class="ctrl-preset-desc">Gas on left, steer on right</div>
+        </div>
+        <div class="ctrl-preset-card" data-preset="dpad">
+          <div class="ctrl-preset-icon">🕹️</div>
+          <div class="ctrl-preset-name">D-PAD</div>
+          <div class="ctrl-preset-desc">Centered cross layout</div>
+        </div>
+      </div>
+
+      <div id="ctrl-panel-actions">
+        <button id="ctrl-edit-btn">✏️ Free Drag</button>
+        <button id="ctrl-reset-btn">↺ Reset</button>
+      </div>
+    </div>
   </div>
 
   <!-- ========== MAIN MENU ========== -->

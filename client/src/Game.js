@@ -7,6 +7,7 @@ import { Car, VEHICLE_CONFIGS, colorHexToIndex } from './Car.js';
 import { Network, toServer } from './Network.js';
 import { HUD } from './HUD.js';
 import { ParticleSystem } from './Particles.js';
+import { MobileControls } from './MobileControls.js';
 
 export class Game {
     constructor(container, playerName, vehicleType) {
@@ -113,7 +114,7 @@ export class Game {
         if (!this.isDead) {
             const input = {
                 forward:  this.keys['KeyW'] || this.keys['ArrowUp'],
-                backward: this.keys['KeyS'] || this.keys['ArrowDown'],
+                backward: this.keys['KeyS'] || this.keys['ArrowDown'] || this.keys['Space'],
                 left:     this.keys['KeyA'] || this.keys['ArrowLeft'],
                 right:    this.keys['KeyD'] || this.keys['ArrowRight']
             };
@@ -293,36 +294,9 @@ export class Game {
         // Mobile touch controls
         const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isTouch) {
-            const mc = document.getElementById('mobile-controls');
-            if (mc) mc.style.display = 'block';
-
-            const bindBtn = (id, key) => {
-                const btn = document.getElementById(id);
-                if (!btn) return;
-                
-                // Touch events
-                btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault(); // prevent zoom/scroll
-                    this.keys[key] = true;
-                }, { passive: false });
-                btn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.keys[key] = false;
-                }, { passive: false });
-                btn.addEventListener('touchcancel', (e) => {
-                    this.keys[key] = false;
-                });
-
-                // Mouse fallback for testing
-                btn.addEventListener('mousedown', (e) => { this.keys[key] = true; });
-                btn.addEventListener('mouseup', (e) => { this.keys[key] = false; });
-                btn.addEventListener('mouseleave', (e) => { this.keys[key] = false; });
-            };
-
-            bindBtn('btn-up', 'ArrowUp');
-            bindBtn('btn-down', 'ArrowDown');
-            bindBtn('btn-left', 'ArrowLeft');
-            bindBtn('btn-right', 'ArrowRight');
+            this.mobileControls = new MobileControls(this.keys);
+            this.mobileControls.show();
+            this.mobileControls.bindPanelEvents();
         }
     }
 
