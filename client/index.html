@@ -187,57 +187,10 @@
         </div>
       </div>
 
-      <!-- Buttons -->
-      <div id="menu-buttons" style="display: flex; gap: 15px; justify-content: center; margin-top: 10px;">
-        <button id="play-btn">▶ PLAY</button>
-        <button id="settings-btn" style="padding: 14px 24px; border-radius: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-family: 'Inter'; font-weight: bold; font-size: 18px; transition: all 0.2s;">⚙️ SETTINGS</button>
-      </div>
+      <!-- Play Button -->
+      <button id="play-btn">▶ PLAY</button>
 
       <p id="landscape-hint" style="display: none;">Rotate your phone horizontally for a better experience 📱</p>
-    </div>
-  </div>
-
-  <!-- ========== SETTINGS MODAL ========== -->
-  <div id="settings-modal" style="display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,0,0,0.8); z-index: 300; justify-content: center; align-items: center;">
-    <div id="settings-content" style="background: rgba(20,20,20,0.6); backdrop-filter: blur(24px); border: 1px solid var(--theme-border); padding: 30px; border-radius: 16px; color: white; font-family: 'Inter'; max-width: 500px; width: 90%;">
-      <h2 style="font-weight: 900; letter-spacing: 2px; margin-bottom: 20px; text-align: center; color: var(--theme-accent);">⚙️ CONTROLS</h2>
-      
-      <div id="keyboard-settings" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;">
-        <h3 style="font-size: 14px; color: #888; letter-spacing: 1px;">KEYBOARD BINDINGS</h3>
-        <div class="keybind-row" style="display:flex; justify-content: space-between; align-items: center;">
-          <span>Forward</span> <button class="keybind-btn" data-action="forward">W / ArrowUp</button>
-        </div>
-        <div class="keybind-row" style="display:flex; justify-content: space-between; align-items: center;">
-          <span>Backward</span> <button class="keybind-btn" data-action="backward">S / ArrowDown</button>
-        </div>
-        <div class="keybind-row" style="display:flex; justify-content: space-between; align-items: center;">
-          <span>Left</span> <button class="keybind-btn" data-action="left">A / ArrowLeft</button>
-        </div>
-        <div class="keybind-row" style="display:flex; justify-content: space-between; align-items: center;">
-          <span>Right</span> <button class="keybind-btn" data-action="right">D / ArrowRight</button>
-        </div>
-        <div id="keybind-hint" style="font-size: 11px; color: #ffaa00; text-align: center; height: 14px; margin-top: 5px;"></div>
-      </div>
-
-      <div id="mobile-settings" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
-        <h3 style="font-size: 14px; color: #888; letter-spacing: 1px;">MOBILE LAYOUT</h3>
-        <button id="edit-layout-btn" style="padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-family: 'Inter'; font-weight: bold; width: 100%;">👆 CUSTOMIZE ON-SCREEN BUTTONS</button>
-      </div>
-
-      <button id="close-settings-btn" style="width: 100%; padding: 12px; border-radius: 8px; background: var(--theme-accent); border: none; color: #111; cursor: pointer; font-family: 'Inter'; font-weight: 800; font-size: 16px;">DONE</button>
-    </div>
-  </div>
-
-  <!-- ========== UI EDIT OVERLAY ========== -->
-  <div id="ui-edit-overlay" style="display: none; position: fixed; top:0; left:0; width:100vw; height:100vh; background: rgba(0,255,255,0.1); z-index: 400; border: 4px dashed rgba(0,255,255,0.5);">
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 20px; color: white; text-align: center; font-family: 'Inter'; width: 300px;">
-      <h3 style="margin-bottom: 5px;">EDIT LAYOUT</h3>
-      <p style="font-size: 12px; color: #aaa; margin-bottom: 10px;">Drag buttons to move them.</p>
-      <div style="display:flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px;">
-        <span style="font-size:12px;">Size:</span>
-        <input type="range" id="ui-scale-slider" min="0.5" max="2" step="0.1" value="1" style="width: 100px;">
-      </div>
-      <button id="save-layout-btn" style="background: #00ffcc; border: none; padding: 6px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">SAVE</button>
     </div>
   </div>
 
