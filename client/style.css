@@ -827,16 +827,15 @@ body {
   transform: scale(0.93);
 }
 
-/* Brake button — square/distinct */
-#btn-brake {
-  background: rgba(160, 30, 30, 0.45);
-  border-color: rgba(255, 80, 80, 0.4);
-  font-size: 18px;
-  letter-spacing: 0;
+/* Drift button — distinct blue accent */
+#btn-drift {
+  background: rgba(20, 40, 120, 0.5);
+  border-color: rgba(80, 140, 255, 0.5);
+  font-size: 20px;
 }
 
-#btn-brake:active {
-  background: rgba(220, 50, 50, 0.6);
+#btn-drift:active {
+  background: rgba(50, 100, 220, 0.65);
 }
 
 /* Edit Mode — buttons jiggle to indicate they're draggable */

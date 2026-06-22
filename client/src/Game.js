@@ -98,6 +98,16 @@ export class Game {
 
         // ---- Start game loop ----
         this._animate();
+
+        // Request fullscreen when game starts
+        const requestFS = document.documentElement.requestFullscreen
+            || document.documentElement.webkitRequestFullscreen
+            || document.documentElement.mozRequestFullScreen;
+        if (requestFS) {
+            requestFS.call(document.documentElement).catch(() => {
+                // Silently ignore if user blocks fullscreen
+            });
+        }
     }
 
     // ========================================================================
@@ -114,9 +124,10 @@ export class Game {
         if (!this.isDead) {
             const input = {
                 forward:  this.keys['KeyW'] || this.keys['ArrowUp'],
-                backward: this.keys['KeyS'] || this.keys['ArrowDown'] || this.keys['Space'],
+                backward: this.keys['KeyS'] || this.keys['ArrowDown'],
                 left:     this.keys['KeyA'] || this.keys['ArrowLeft'],
-                right:    this.keys['KeyD'] || this.keys['ArrowRight']
+                right:    this.keys['KeyD'] || this.keys['ArrowRight'],
+                drift:    this.keys['Space']
             };
             this.player.updatePhysics(input, delta);
 
@@ -286,6 +297,8 @@ export class Game {
     _setupInput() {
         window.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
+            // Prevent Space from scrolling the page
+            if (e.code === 'Space') e.preventDefault();
         });
         window.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;

@@ -11,7 +11,7 @@ const BUTTON_DEFS = [
     { id: 'btn-left',   label: '◀', key: 'ArrowLeft'  },
     { id: 'btn-right',  label: '▶', key: 'ArrowRight' },
     { id: 'btn-up',     label: '▲', key: 'ArrowUp'    },
-    { id: 'btn-brake',  label: '■', key: 'Space'      },
+    { id: 'btn-drift',  label: '💨', key: 'Space'      },
     { id: 'btn-down',   label: '▼', key: 'ArrowDown'  },
 ];
 
@@ -19,12 +19,12 @@ const BUTTON_DEFS = [
 const PRESETS = {
     classic: {
         label: '⬜ Classic',
-        desc: 'Steer left, Gas/Brake right',
+        desc: 'Standard split layout',
         positions: {
             'btn-left':  [4,  12],
             'btn-right': [16, 12],
             'btn-up':    [76, 18],
-            'btn-brake': [88, 18],
+            'btn-drift': [88, 18],
             'btn-down':  [82, 8 ],
         }
     },
@@ -35,16 +35,16 @@ const PRESETS = {
             'btn-left':  [2,  22],
             'btn-right': [18, 22],
             'btn-up':    [78, 22],
-            'btn-brake': [92, 22],
+            'btn-drift': [92, 22],
             'btn-down':  [85, 10],
         }
     },
     lefty: {
         label: '🤚 Left-Hand',
-        desc: 'Gas/Brake left, Steer right',
+        desc: 'Gas on left, steer on right',
         positions: {
             'btn-up':    [4,  18],
-            'btn-brake': [16, 18],
+            'btn-drift': [16, 18],
             'btn-down':  [10, 8 ],
             'btn-left':  [76, 12],
             'btn-right': [88, 12],
@@ -57,7 +57,7 @@ const PRESETS = {
             'btn-left':  [36, 10],
             'btn-right': [56, 10],
             'btn-up':    [46, 22],
-            'btn-brake': [46, 2 ],
+            'btn-drift': [46, 2 ],
             'btn-down':  [56, 2 ],
         }
     }

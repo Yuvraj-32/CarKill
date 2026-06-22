@@ -73,6 +73,9 @@ export class Car {
         this.speed = 0;
         this.angle = 0; // rotation.y in radians
         this.bounce = { x: 0, z: 0 };
+        this.driftVelX = 0; // lateral slip velocity
+        this.driftVelZ = 0;
+        this.isDrifting = false;
 
         this.health = cfg.maxHealth;
         this.maxHealth = cfg.maxHealth;
@@ -442,6 +445,9 @@ export class Car {
         const cfg = this.cfg;
         const dt = Math.min(delta, 0.05); // cap at 50ms
 
+        const drifting = !!input.drift;
+        this.isDrifting = drifting;
+
         // Acceleration
         if (input.forward) {
             this.speed += cfg.accel * dt;
@@ -449,41 +455,72 @@ export class Car {
             this.speed -= cfg.brakeDecel * dt;
         }
 
-        // Friction / drag (frame-rate independent)
-        this.speed *= Math.pow(cfg.drag, dt * 60);
+        // Friction / drag
+        // When drifting, drag is much weaker (keep momentum)
+        const activeDrag = drifting ? Math.pow(0.998, dt * 60) : Math.pow(cfg.drag, dt * 60);
+        this.speed *= activeDrag;
 
         // Clamp speed
         this.speed = Math.max(-cfg.maxSpeed * 0.3, Math.min(cfg.maxSpeed, this.speed));
 
-        // Kill tiny drift
-        if (!input.forward && !input.backward && Math.abs(this.speed) < 0.5) {
+        // Kill tiny speed
+        if (!input.forward && !input.backward && Math.abs(this.speed) < 0.5 && !drifting) {
             this.speed = 0;
         }
 
-        // Turning (only when moving, scales with speed)
+        // Turning
         let steerInput = 0;
         if (Math.abs(this.speed) > 1) {
             const turnDir = this.speed > 0 ? 1 : -1;
             const speedFactor = Math.min(1, Math.abs(this.speed) / 15);
-            if (input.left)  { this.angle += cfg.turnSpeed * turnDir * speedFactor * dt; steerInput = 1; }
-            if (input.right) { this.angle -= cfg.turnSpeed * turnDir * speedFactor * dt; steerInput = -1; }
+            // Drift: allow sharper turning (reduced grip)
+            const driftBoost = drifting ? 1.5 : 1.0;
+            if (input.left)  { this.angle += cfg.turnSpeed * driftBoost * turnDir * speedFactor * dt; steerInput = 1; }
+            if (input.right) { this.angle -= cfg.turnSpeed * driftBoost * turnDir * speedFactor * dt; steerInput = -1; }
         }
 
-        // Update position
-        this.group.position.x += Math.sin(this.angle) * this.speed * dt;
-        this.group.position.z += Math.cos(this.angle) * this.speed * dt;
+        // ---- Drift: split forward velocity from lateral slip ----
+        if (drifting && Math.abs(this.speed) > 8) {
+            // Decompose current velocity into forward + lateral
+            const fwdX = Math.sin(this.angle);
+            const fwdZ = Math.cos(this.angle);
+
+            // Current total velocity vector
+            const velX = fwdX * this.speed + this.driftVelX;
+            const velZ = fwdZ * this.speed + this.driftVelZ;
+
+            // Project onto new forward direction after turning
+            const forwardComp = velX * fwdX + velZ * fwdZ;
+            // Lateral component (what causes the slide)
+            const latX = velX - fwdX * forwardComp;
+            const latZ = velZ - fwdZ * forwardComp;
+
+            // Blend lateral into drift velocity (feel of losing traction)
+            this.driftVelX = this.driftVelX * 0.85 + latX * 0.5;
+            this.driftVelZ = this.driftVelZ * 0.85 + latZ * 0.5;
+
+            // Bleed forward speed during drift
+            this.speed = forwardComp * 0.98;
+        } else {
+            // Quickly cancel drift velocity when not drifting
+            this.driftVelX *= Math.pow(0.01, dt);
+            this.driftVelZ *= Math.pow(0.01, dt);
+        }
+
+        // Update position (forward movement + lateral drift)
+        this.group.position.x += (Math.sin(this.angle) * this.speed + this.driftVelX) * dt;
+        this.group.position.z += (Math.cos(this.angle) * this.speed + this.driftVelZ) * dt;
         this.group.rotation.y = this.angle;
 
-        // Apply dynamic bounce velocity
+        // Apply bounce
         if (Math.abs(this.bounce.x) > 0.1 || Math.abs(this.bounce.z) > 0.1) {
             this.group.position.x += this.bounce.x * dt;
             this.group.position.z += this.bounce.z * dt;
-            this.bounce.x *= Math.pow(0.005, dt); // Heavy friction for bounce
+            this.bounce.x *= Math.pow(0.005, dt);
             this.bounce.z *= Math.pow(0.005, dt);
         }
 
-        // Animate visuals (local car)
-        this._animateCarVisuals(this.speed, steerInput, input.forward, input.backward, dt);
+        this._animateCarVisuals(this.speed, steerInput, input.forward, input.backward, dt, drifting);
     }
 
     // ========================================================================
@@ -516,42 +553,43 @@ export class Car {
         this._animateCarVisuals(estSpeed, estSteer, estSpeed > 5, estSpeed < -5, 0.016);
     }
 
-    _animateCarVisuals(speed, steerInput, isAccel, isBraking, dt) {
+    _animateCarVisuals(speed, steerInput, isAccel, isBraking, dt, isDrifting) {
         // Spin wheels
         const wheelSpin = speed * dt * 1.5;
         this.wheels.forEach(w => { w.rotation.x += wheelSpin; });
 
         // Steer front wheels
-        const maxSteer = Math.PI / 5;
+        const maxSteer = isDrifting ? Math.PI / 3.5 : Math.PI / 5;
         this.frontWheels.forEach(fw => {
             fw.rotation.y += (steerInput * maxSteer - fw.rotation.y) * 0.15;
         });
 
         // Chassis tilt/lean
         if (this.chassis) {
-            // Lean forward/back based on accel/brake
             let targetPitch = 0;
-            if (isAccel) targetPitch = -0.05; // nose up
-            if (isBraking) targetPitch = 0.08; // nose down
+            if (isAccel) targetPitch = -0.05;
+            if (isBraking) targetPitch = 0.08;
             this.chassis.rotation.x += (targetPitch - this.chassis.rotation.x) * 0.1;
 
-            // Lean left/right based on steering
-            const targetRoll = steerInput * (speed / this.cfg.maxSpeed) * 0.12;
+            // Extra lean during drift
+            const driftRollBoost = isDrifting ? 2.0 : 1.0;
+            const targetRoll = steerInput * (speed / this.cfg.maxSpeed) * 0.12 * driftRollBoost;
             this.chassis.rotation.z += (targetRoll - this.chassis.rotation.z) * 0.1;
         }
 
         // Particle Emission
         if (window.particleSystem) {
-            // Tire dirt trails
             if (Math.abs(speed) > 10) {
-                // Determine if on dirt/wasteland
                 const intensity = Math.abs(speed) / this.cfg.maxSpeed;
-                if (Math.random() < intensity * 0.6) {
-                    this.rearWheels.forEach(rw => {
+                // During drift: heavy smoke from ALL four wheels
+                const dustChance = isDrifting ? 1.0 : intensity * 0.6;
+                if (Math.random() < dustChance) {
+                    const wheels = isDrifting ? [...this.wheels] : [...this.rearWheels];
+                    wheels.forEach(rw => {
                         const wPos = new THREE.Vector3();
                         rw.getWorldPosition(wPos);
-                        wPos.y = 0.2; // ground level
-                        window.particleSystem.spawnDust(wPos, null, Math.abs(speed));
+                        wPos.y = 0.2;
+                        window.particleSystem.spawnDust(wPos, null, isDrifting ? this.cfg.maxSpeed : Math.abs(speed));
                     });
                 }
             }
