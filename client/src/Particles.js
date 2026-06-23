@@ -121,10 +121,10 @@ export class ParticleSystem {
                 position.x + (Math.random()-0.5)*0.8,
                 0.15,
                 position.z + (Math.random()-0.5)*0.8,
-                (Math.random()-0.5)*2, Math.random()*1.5+0.5, (Math.random()-0.5)*2,
+                (Math.random()-0.5)*3, Math.random()*2.5+0.8, (Math.random()-0.5)*3,
                 g, g, g,
                 0.4 + Math.random()*0.3,
-                0.5 + Math.random()*0.3,
+                0.18 + Math.random()*0.12,  // SHORT: 0.18-0.3s
                 TYPE_DUST
             );
         }
@@ -136,10 +136,10 @@ export class ParticleSystem {
             position.x + (Math.random()-0.5)*0.1,
             position.y + (Math.random()-0.5)*0.1,
             position.z + (Math.random()-0.5)*0.1,
-            (Math.random()-0.5)*0.5, 1.0+Math.random()*1.0, (Math.random()-0.5)*0.5,
+            (Math.random()-0.5)*0.6, 2.5+Math.random()*2.0, (Math.random()-0.5)*0.6, // faster upward
             gray, gray, gray,
-            (0.6 + Math.random()*0.5) * scale,
-            0.6 + Math.random()*0.4,
+            (0.5 + Math.random()*0.4) * scale,
+            0.22 + Math.random()*0.15,  // SHORT: 0.22-0.37s max
             TYPE_EXHAUST
         );
     }
@@ -274,9 +274,9 @@ export class ParticleSystem {
             this._positions[i*3+1] += this._vy[i] * dt;
             this._positions[i*3+2] += this._vz[i] * dt;
 
-            // Gravity (exhaust drifts up, others fall)
+            // Gravity (exhaust rises fast then falls, others fall)
             if (this._type[i] === TYPE_EXHAUST) {
-                this._vy[i] -= 0.3 * dt; // light buoyancy loss
+                this._vy[i] -= 4 * dt; // buoyancy loss — smoke slows as it rises
             } else {
                 this._vy[i] -= 15 * dt;
             }
@@ -287,8 +287,9 @@ export class ParticleSystem {
                 this._vy[i] *= -0.25;
             }
 
-            // Fade out — fade size proportionally
-            this._sizes[i] = (1 - t) * (this._type[i] === TYPE_DUST || this._type[i] === TYPE_EXHAUST ? 0.8 : 0.5);
+            // Squared fade — particles vanish sharply at end, not a slow linear linger
+            const fade = 1 - t * t;
+            this._sizes[i] = fade * (this._type[i] === TYPE_DUST || this._type[i] === TYPE_EXHAUST ? 0.7 : 0.5);
 
             needsUpdate = true;
         }

@@ -448,71 +448,79 @@ export class Car {
         const drifting = !!input.drift;
         this.isDrifting = drifting;
 
-        // Acceleration
+        // ---- Smooth steering input (interpolated, not instant snap) ----
+        const targetSteer = input.left ? 1 : input.right ? -1 : 0;
+        const steerRate = 8; // how fast steering responds (higher = snappier)
+        this._smoothSteer = (this._smoothSteer || 0) +
+            (targetSteer - this._smoothSteer) * Math.min(1, steerRate * dt);
+
+        // ---- Acceleration with a punchy feel ----
+        // Use a stronger initial kick that tapers as speed builds (like a real engine)
+        const speedRatio = Math.abs(this.speed) / cfg.maxSpeed;
+        const accelMultiplier = 1.0 + (1 - speedRatio) * 0.6; // extra torque at low speed
+
         if (input.forward) {
-            this.speed += cfg.accel * dt;
+            this.speed += cfg.accel * accelMultiplier * dt;
         } else if (input.backward) {
-            this.speed -= cfg.brakeDecel * dt;
+            // Braking is instant; reversing is slower
+            if (this.speed > 0.5) {
+                this.speed -= cfg.brakeDecel * dt; // braking
+            } else {
+                this.speed -= cfg.accel * 0.5 * dt; // reversing
+            }
         }
 
-        // Friction / drag
-        // When drifting, drag is much weaker (keep momentum)
+        // ---- Drag — drifting keeps momentum, coasting slows smoothly ----
         const activeDrag = drifting ? Math.pow(0.998, dt * 60) : Math.pow(cfg.drag, dt * 60);
         this.speed *= activeDrag;
 
         // Clamp speed
-        this.speed = Math.max(-cfg.maxSpeed * 0.3, Math.min(cfg.maxSpeed, this.speed));
+        this.speed = Math.max(-cfg.maxSpeed * 0.35, Math.min(cfg.maxSpeed, this.speed));
 
-        // Kill tiny speed
+        // Kill tiny speed at standstill
         if (!input.forward && !input.backward && Math.abs(this.speed) < 0.5 && !drifting) {
             this.speed = 0;
         }
 
-        // Turning
+        // ---- Turning: full response at low speed, reduced at high speed ----
+        // This prevents the car from overpivoting at top speed (more realistic)
         let steerInput = 0;
-        if (Math.abs(this.speed) > 1) {
+        if (Math.abs(this.speed) > 0.5) {
             const turnDir = this.speed > 0 ? 1 : -1;
-            const speedFactor = Math.min(1, Math.abs(this.speed) / 15);
-            // Drift: allow sharper turning (reduced grip)
-            const driftBoost = drifting ? 1.5 : 1.0;
-            if (input.left)  { this.angle += cfg.turnSpeed * driftBoost * turnDir * speedFactor * dt; steerInput = 1; }
-            if (input.right) { this.angle -= cfg.turnSpeed * driftBoost * turnDir * speedFactor * dt; steerInput = -1; }
+            // Turn ramp: full turning starts at speed 5 (was 15), reduces above maxSpeed*0.6
+            const absSpeed = Math.abs(this.speed);
+            const lowFactor  = Math.min(1, absSpeed / 5);                          // ramps up quickly
+            const highReduce = Math.max(0.45, 1 - (absSpeed / cfg.maxSpeed) * 0.5); // reduces at top speed
+            const driftBoost = drifting ? 1.6 : 1.0;
+            const turnAmount = cfg.turnSpeed * driftBoost * turnDir * lowFactor * highReduce * dt;
+
+            this.angle += this._smoothSteer * turnAmount;
+            steerInput = this._smoothSteer; // pass smooth value for visuals
         }
 
-        // ---- Drift: split forward velocity from lateral slip ----
+        // ---- Drift physics ----
         if (drifting && Math.abs(this.speed) > 8) {
-            // Decompose current velocity into forward + lateral
             const fwdX = Math.sin(this.angle);
             const fwdZ = Math.cos(this.angle);
-
-            // Current total velocity vector
             const velX = fwdX * this.speed + this.driftVelX;
             const velZ = fwdZ * this.speed + this.driftVelZ;
-
-            // Project onto new forward direction after turning
             const forwardComp = velX * fwdX + velZ * fwdZ;
-            // Lateral component (what causes the slide)
             const latX = velX - fwdX * forwardComp;
             const latZ = velZ - fwdZ * forwardComp;
-
-            // Blend lateral into drift velocity (feel of losing traction)
             this.driftVelX = this.driftVelX * 0.85 + latX * 0.5;
             this.driftVelZ = this.driftVelZ * 0.85 + latZ * 0.5;
-
-            // Bleed forward speed during drift
             this.speed = forwardComp * 0.98;
         } else {
-            // Quickly cancel drift velocity when not drifting
             this.driftVelX *= Math.pow(0.01, dt);
             this.driftVelZ *= Math.pow(0.01, dt);
         }
 
-        // Update position (forward movement + lateral drift)
+        // ---- Position update ----
         this.group.position.x += (Math.sin(this.angle) * this.speed + this.driftVelX) * dt;
         this.group.position.z += (Math.cos(this.angle) * this.speed + this.driftVelZ) * dt;
         this.group.rotation.y = this.angle;
 
-        // Apply bounce
+        // Apply bounce from collisions
         if (Math.abs(this.bounce.x) > 0.1 || Math.abs(this.bounce.z) > 0.1) {
             this.group.position.x += this.bounce.x * dt;
             this.group.position.z += this.bounce.z * dt;
