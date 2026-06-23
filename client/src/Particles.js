@@ -1,190 +1,190 @@
 // ============================================================================
-// Particles.js — Collision & dust particle effects
+// Particles.js — Pooled GPU point-sprite particle system (single draw call)
 // ============================================================================
 import * as THREE from 'three';
 
-const PARTICLE_COLORS = [0xff6600, 0xffaa00, 0xff3300, 0xffff00, 0xff8800];
+const MAX_PARTICLES   = 800;  // absolute hard cap — all types combined
+const MAX_COINS       = 30;   // coins use separate mesh array (need physics/collect)
+
+// ---- Particle types ----
+const TYPE_COLLISION  = 0;
+const TYPE_DUST       = 1;
+const TYPE_EXHAUST    = 2;
+const TYPE_EXPLOSION  = 3;
 
 export class ParticleSystem {
     constructor(scene) {
         this.scene = scene;
-        this.bursts = []; // active burst arrays
+
+        // ---- GPU point sprites ----
+        this._positions  = new Float32Array(MAX_PARTICLES * 3);
+        this._colors     = new Float32Array(MAX_PARTICLES * 3);
+        this._sizes      = new Float32Array(MAX_PARTICLES);
+        this._alphas     = new Float32Array(MAX_PARTICLES);  // for shader
+
+        // CPU-side state (no per-particle mesh objects)
+        this._vx = new Float32Array(MAX_PARTICLES);
+        this._vy = new Float32Array(MAX_PARTICLES);
+        this._vz = new Float32Array(MAX_PARTICLES);
+        this._age      = new Float32Array(MAX_PARTICLES);
+        this._lifetime = new Float32Array(MAX_PARTICLES);
+        this._active   = new Uint8Array(MAX_PARTICLES);       // 0=free, 1=active
+        this._type     = new Uint8Array(MAX_PARTICLES);
+        this._count    = 0; // next-free hint
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(this._positions, 3));
+        geo.setAttribute('color',    new THREE.BufferAttribute(this._colors,    3));
+        geo.setAttribute('size',     new THREE.BufferAttribute(this._sizes,     1));
+
+        const mat = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 1,
+            depthWrite: false,
+            sizeAttenuation: true,
+        });
+
+        this._points = new THREE.Points(geo, mat);
+        this._points.frustumCulled = false;
+        scene.add(this._points);
+
+        // ---- Coins: still individual meshes (need physics + collection) ----
+        this.coins  = [];
+        this.bursts = []; // kept for coin compat only
     }
 
-    /** Spawn a collision burst at a world position */
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
+
+    _alloc() {
+        // Find a free slot — linear scan with wrap
+        const n = MAX_PARTICLES;
+        for (let i = 0; i < n; i++) {
+            const idx = (this._count + i) % n;
+            if (!this._active[idx]) {
+                this._count = (idx + 1) % n;
+                return idx;
+            }
+        }
+        return -1; // pool full, drop particle
+    }
+
+    _spawn(x, y, z, vx, vy, vz, r, g, b, size, lifetime, type) {
+        const i = this._alloc();
+        if (i < 0) return;
+        this._active[i]   = 1;
+        this._type[i]     = type;
+        this._age[i]      = 0;
+        this._lifetime[i] = lifetime;
+        this._positions[i*3]   = x;
+        this._positions[i*3+1] = y;
+        this._positions[i*3+2] = z;
+        this._vx[i] = vx; this._vy[i] = vy; this._vz[i] = vz;
+        this._colors[i*3]   = r;
+        this._colors[i*3+1] = g;
+        this._colors[i*3+2] = b;
+        this._sizes[i] = size;
+        this._alphas[i] = 1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Public spawn API — matches original interface
+    // -------------------------------------------------------------------------
+
     spawnCollision(position, intensity = 1) {
-        const count = Math.floor(12 + intensity * 8);
-        const particles = [];
-
+        const count = Math.floor(8 + intensity * 6);
         for (let i = 0; i < count; i++) {
-            const color = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-            const size = 0.08 + Math.random() * 0.15;
-            const geo = new THREE.SphereGeometry(size, 4, 4);
-            const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(
-                position.x + (Math.random() - 0.5) * 1.5,
-                position.y + 0.5 + Math.random() * 0.5,
-                position.z + (Math.random() - 0.5) * 1.5
+            const colors = [[1,0.4,0],[1,0.7,0],[1,0.2,0],[1,1,0],[1,0.55,0]];
+            const [r,g,b] = colors[Math.floor(Math.random() * colors.length)];
+            const speed = 3 + Math.random() * 7 * intensity;
+            this._spawn(
+                position.x + (Math.random()-0.5)*1.5,
+                position.y + 0.5 + Math.random()*0.5,
+                position.z + (Math.random()-0.5)*1.5,
+                (Math.random()-0.5)*speed, Math.random()*speed*0.7+2, (Math.random()-0.5)*speed,
+                r, g, b,
+                0.5 + Math.random()*0.5,
+                0.4 + Math.random()*0.4,
+                TYPE_COLLISION
             );
-
-            const speed = 3 + Math.random() * 8 * intensity;
-            mesh.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * speed,
-                Math.random() * speed * 0.7 + 2,
-                (Math.random() - 0.5) * speed
-            );
-            mesh.userData.lifetime = 0.4 + Math.random() * 0.4;
-            mesh.userData.age = 0;
-
-            this.scene.add(mesh);
-            particles.push(mesh);
         }
-
-        this.bursts.push(particles);
     }
 
-    /** Spawn dust puff behind a moving car */
-    spawnDust(position, direction, speed) {
-        if (speed < 15) return; // only at higher speeds
-        const count = 2;
-        const particles = [];
-
-        for (let i = 0; i < count; i++) {
-            const geo = new THREE.SphereGeometry(0.1 + Math.random() * 0.1, 4, 4);
-            const mat = new THREE.MeshBasicMaterial({
-                color: 0x888888, transparent: true, opacity: 0.4
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(
-                position.x + (Math.random() - 0.5) * 0.8,
+    spawnDust(position, _direction, speed) {
+        if (speed < 15) return;
+        for (let i = 0; i < 2; i++) {
+            const g = 0.45 + Math.random()*0.2;
+            this._spawn(
+                position.x + (Math.random()-0.5)*0.8,
                 0.15,
-                position.z + (Math.random() - 0.5) * 0.8
+                position.z + (Math.random()-0.5)*0.8,
+                (Math.random()-0.5)*2, Math.random()*1.5+0.5, (Math.random()-0.5)*2,
+                g, g, g,
+                0.4 + Math.random()*0.3,
+                0.5 + Math.random()*0.3,
+                TYPE_DUST
             );
-
-            mesh.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 2,
-                Math.random() * 1.5 + 0.5,
-                (Math.random() - 0.5) * 2
-            );
-            mesh.userData.lifetime = 0.5 + Math.random() * 0.3;
-            mesh.userData.age = 0;
-
-            this.scene.add(mesh);
-            particles.push(mesh);
         }
-
-        this.bursts.push(particles);
     }
 
-    /** Spawn continuous exhaust smoke */
     spawnExhaustSmoke(position, scale = 1) {
-        const count = 1;
-        const particles = [];
-        
-        for (let i = 0; i < count; i++) {
-            const size = (0.25 + Math.random() * 0.25) * scale;
-            const geo = new THREE.SphereGeometry(size, 4, 4);
-            const gray = Math.floor(10 + Math.random() * 20); // thick black soot
-            const mat = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(`rgb(${gray}, ${gray}, ${gray})`),
-                transparent: true, opacity: 0.8
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(
-                position.x + (Math.random() - 0.5) * 0.1,
-                position.y + (Math.random() - 0.5) * 0.1,
-                position.z + (Math.random() - 0.5) * 0.1
-            );
-
-            // Smoke drifts up and slightly randomly
-            mesh.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 0.5,
-                1.0 + Math.random() * 1.0,
-                (Math.random() - 0.5) * 0.5
-            );
-            mesh.userData.lifetime = 0.6 + Math.random() * 0.4;
-            mesh.userData.age = 0;
-            mesh.userData.isExhaust = true;
-
-            this.scene.add(mesh);
-            particles.push(mesh);
-        }
-        
-        this.bursts.push(particles);
+        const gray = 0.05 + Math.random()*0.08;
+        this._spawn(
+            position.x + (Math.random()-0.5)*0.1,
+            position.y + (Math.random()-0.5)*0.1,
+            position.z + (Math.random()-0.5)*0.1,
+            (Math.random()-0.5)*0.5, 1.0+Math.random()*1.0, (Math.random()-0.5)*0.5,
+            gray, gray, gray,
+            (0.6 + Math.random()*0.5) * scale,
+            0.6 + Math.random()*0.4,
+            TYPE_EXHAUST
+        );
     }
 
-    /** Spawn a massive explosion at a death position */
     spawnExplosion(position) {
-        const count = 45;
-        const particles = [];
-        const explosionColors = [0xff2200, 0xff5500, 0xff8800, 0xffcc00, 0xffff00, 0xff0000, 0xffa500];
-
-        for (let i = 0; i < count; i++) {
-            const color = explosionColors[Math.floor(Math.random() * explosionColors.length)];
-            const size = 0.15 + Math.random() * 0.35;
-            const geo = new THREE.SphereGeometry(size, 5, 5);
-            const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(
-                position.x + (Math.random() - 0.5) * 2,
-                position.y + 0.5 + Math.random() * 1,
-                position.z + (Math.random() - 0.5) * 2
+        const expColors = [[1,0.13,0],[1,0.33,0],[1,0.53,0],[1,0.8,0],[1,1,0],[0.65,0,0],[1,0.65,0]];
+        // Fire particles
+        for (let i = 0; i < 35; i++) {
+            const [r,g,b] = expColors[Math.floor(Math.random() * expColors.length)];
+            const speed = 5 + Math.random()*15;
+            this._spawn(
+                position.x + (Math.random()-0.5)*2,
+                position.y + 0.5 + Math.random()*1,
+                position.z + (Math.random()-0.5)*2,
+                (Math.random()-0.5)*speed, Math.random()*speed*0.8+4, (Math.random()-0.5)*speed,
+                r, g, b,
+                0.6 + Math.random()*0.7,
+                0.6 + Math.random()*0.8,
+                TYPE_EXPLOSION
             );
-
-            const speed = 5 + Math.random() * 15;
-            mesh.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * speed,
-                Math.random() * speed * 0.8 + 4,
-                (Math.random() - 0.5) * speed
-            );
-            mesh.userData.lifetime = 0.6 + Math.random() * 0.8;
-            mesh.userData.age = 0;
-
-            this.scene.add(mesh);
-            particles.push(mesh);
         }
-
-        // Smoke particles (gray, slower, linger longer)
-        for (let i = 0; i < 15; i++) {
-            const size = 0.3 + Math.random() * 0.4;
-            const geo = new THREE.SphereGeometry(size, 4, 4);
-            const gray = Math.floor(60 + Math.random() * 40);
-            const mat = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(`rgb(${gray}, ${gray}, ${gray})`),
-                transparent: true, opacity: 0.6
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(
-                position.x + (Math.random() - 0.5) * 2,
+        // Smoke
+        for (let i = 0; i < 12; i++) {
+            const gv = 0.25 + Math.random()*0.15;
+            const speed2 = 2 + Math.random()*4;
+            this._spawn(
+                position.x + (Math.random()-0.5)*2,
                 position.y + 0.8,
-                position.z + (Math.random() - 0.5) * 2
+                position.z + (Math.random()-0.5)*2,
+                (Math.random()-0.5)*speed2, 1+Math.random()*3, (Math.random()-0.5)*speed2,
+                gv, gv, gv,
+                0.9 + Math.random()*0.6,
+                1.0 + Math.random()*1.0,
+                TYPE_EXHAUST
             );
-
-            mesh.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * 3,
-                1 + Math.random() * 3,
-                (Math.random() - 0.5) * 3
-            );
-            mesh.userData.lifetime = 1.0 + Math.random() * 1.0;
-            mesh.userData.age = 0;
-
-            this.scene.add(mesh);
-            particles.push(mesh);
         }
-
-        this.bursts.push(particles);
     }
 
-    /** Spawn bouncing gold coins from a death position */
+    // -------------------------------------------------------------------------
+    // Coins — kept as meshes for physics/collection interaction
+    // -------------------------------------------------------------------------
+
     spawnCoins(position, coinCount = 5) {
         const particles = [];
-        this.coins = this.coins || []; // track active coin meshes for collection
+        this.coins = this.coins || [];
 
         for (let i = 0; i < coinCount; i++) {
             const geo = new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12);
@@ -195,24 +195,22 @@ export class ParticleSystem {
             const coin = new THREE.Mesh(geo, mat);
 
             coin.position.set(
-                position.x + (Math.random() - 0.5) * 2,
-                1 + Math.random() * 2,
-                position.z + (Math.random() - 0.5) * 2
+                position.x + (Math.random()-0.5)*2,
+                1 + Math.random()*2,
+                position.z + (Math.random()-0.5)*2
             );
-            coin.rotation.x = Math.PI / 2; // flat like a coin
+            coin.rotation.x = Math.PI / 2;
 
-            const speed = 3 + Math.random() * 6;
+            const speed = 3 + Math.random()*6;
             coin.userData.velocity = new THREE.Vector3(
-                (Math.random() - 0.5) * speed,
-                3 + Math.random() * 5,
-                (Math.random() - 0.5) * speed
+                (Math.random()-0.5)*speed, 3+Math.random()*5, (Math.random()-0.5)*speed
             );
-            coin.userData.lifetime = 15; // coins last 15 seconds
-            coin.userData.age = 0;
-            coin.userData.isCoin = true;
-            coin.userData.value = 1;
-            coin.userData.spinSpeed = 3 + Math.random() * 3;
-            coin.userData.settled = false;
+            coin.userData.lifetime  = 15;
+            coin.userData.age       = 0;
+            coin.userData.isCoin    = true;
+            coin.userData.value     = 1;
+            coin.userData.spinSpeed = 3 + Math.random()*3;
+            coin.userData.settled   = false;
 
             this.scene.add(coin);
             particles.push(coin);
@@ -222,26 +220,21 @@ export class ParticleSystem {
         this.bursts.push(particles);
     }
 
-    /** Check if player position is near any coin, return collected coins */
     collectCoins(playerPos, collectRadius = 3) {
         if (!this.coins) return [];
         const collected = [];
 
         for (let i = this.coins.length - 1; i >= 0; i--) {
             const coin = this.coins[i];
-            if (!coin.userData.settled) continue; // can't collect mid-air coins
-
+            if (!coin.userData.settled) continue;
             const dx = playerPos.x - coin.position.x;
             const dz = playerPos.z - coin.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist < collectRadius) {
+            if (Math.sqrt(dx*dx + dz*dz) < collectRadius) {
                 collected.push(coin.userData.value);
                 this.scene.remove(coin);
                 coin.geometry.dispose();
                 coin.material.dispose();
                 this.coins.splice(i, 1);
-                // Also remove from burst arrays
                 for (const burst of this.bursts) {
                     const idx = burst.indexOf(coin);
                     if (idx !== -1) burst.splice(idx, 1);
@@ -251,89 +244,122 @@ export class ParticleSystem {
         return collected;
     }
 
-    /** Update all active particles — call each frame */
+    // -------------------------------------------------------------------------
+    // Update — called every frame
+    // -------------------------------------------------------------------------
+
     update(delta) {
+        const dt = Math.min(delta, 0.05);
+        let needsUpdate = false;
+
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+            if (!this._active[i]) {
+                // Make sure dead particles are invisible (position them far away)
+                this._sizes[i] = 0;
+                continue;
+            }
+
+            this._age[i] += dt;
+            const t  = this._age[i] / this._lifetime[i];
+
+            if (t >= 1) {
+                this._active[i] = 0;
+                this._sizes[i]  = 0;
+                needsUpdate = true;
+                continue;
+            }
+
+            // Move
+            this._positions[i*3]   += this._vx[i] * dt;
+            this._positions[i*3+1] += this._vy[i] * dt;
+            this._positions[i*3+2] += this._vz[i] * dt;
+
+            // Gravity (exhaust drifts up, others fall)
+            if (this._type[i] === TYPE_EXHAUST) {
+                this._vy[i] -= 0.3 * dt; // light buoyancy loss
+            } else {
+                this._vy[i] -= 15 * dt;
+            }
+
+            // Bounce off ground
+            if (this._positions[i*3+1] < 0.05) {
+                this._positions[i*3+1] = 0.05;
+                this._vy[i] *= -0.25;
+            }
+
+            // Fade out — fade size proportionally
+            this._sizes[i] = (1 - t) * (this._type[i] === TYPE_DUST || this._type[i] === TYPE_EXHAUST ? 0.8 : 0.5);
+
+            needsUpdate = true;
+        }
+
+        // Update coins (mesh-based, unchanged)
         for (let b = this.bursts.length - 1; b >= 0; b--) {
-            const particles = this.bursts[b];
-            let allDead = true;
-
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.userData.age += delta;
-
+            const burst = this.bursts[b];
+            let alive = false;
+            for (let i = burst.length - 1; i >= 0; i--) {
+                const p = burst[i];
+                if (!p.userData.isCoin) continue;
+                p.userData.age += dt;
                 if (p.userData.age >= p.userData.lifetime) {
                     this.scene.remove(p);
                     p.geometry.dispose();
                     p.material.dispose();
-                    particles.splice(i, 1);
-                    // Also remove from coins array if it's a coin
-                    if (p.userData.isCoin && this.coins) {
+                    if (this.coins) {
                         const ci = this.coins.indexOf(p);
                         if (ci !== -1) this.coins.splice(ci, 1);
                     }
+                    burst.splice(i, 1);
                     continue;
                 }
-
-                allDead = false;
-
-                if (p.userData.isCoin) {
-                    // Coin-specific behavior — bounce then settle
-                    if (!p.userData.settled) {
-                        p.position.x += p.userData.velocity.x * delta;
-                        p.position.y += p.userData.velocity.y * delta;
-                        p.position.z += p.userData.velocity.z * delta;
-                        p.userData.velocity.y -= 12 * delta; // gravity
-
-                        if (p.position.y < 0.35) {
-                            p.position.y = 0.35;
-                            if (Math.abs(p.userData.velocity.y) < 1) {
-                                p.userData.settled = true;
-                                p.userData.velocity.set(0, 0, 0);
-                            } else {
-                                p.userData.velocity.y *= -0.4;
-                                p.userData.velocity.x *= 0.6;
-                                p.userData.velocity.z *= 0.6;
-                            }
+                alive = true;
+                if (!p.userData.settled) {
+                    p.position.x += p.userData.velocity.x * dt;
+                    p.position.y += p.userData.velocity.y * dt;
+                    p.position.z += p.userData.velocity.z * dt;
+                    p.userData.velocity.y -= 12 * dt;
+                    if (p.position.y < 0.35) {
+                        p.position.y = 0.35;
+                        if (Math.abs(p.userData.velocity.y) < 1) {
+                            p.userData.settled = true;
+                            p.userData.velocity.set(0,0,0);
+                        } else {
+                            p.userData.velocity.y *= -0.4;
+                            p.userData.velocity.x *= 0.6;
+                            p.userData.velocity.z *= 0.6;
                         }
                     }
-
-                    // Spin the coin
-                    p.rotation.z += p.userData.spinSpeed * delta;
-
-                    // Pulsing glow when settled
-                    if (p.userData.settled) {
-                        const pulse = 0.3 + Math.sin(p.userData.age * 4) * 0.15;
-                        p.material.emissiveIntensity = pulse;
-                        // Fade out in last 3 seconds
-                        if (p.userData.lifetime - p.userData.age < 3) {
-                            p.material.opacity = (p.userData.lifetime - p.userData.age) / 3;
-                            p.material.transparent = true;
-                        }
+                }
+                p.rotation.z += p.userData.spinSpeed * dt;
+                if (p.userData.settled) {
+                    const pulse = 0.3 + Math.sin(p.userData.age * 4) * 0.15;
+                    p.material.emissiveIntensity = pulse;
+                    if (p.userData.lifetime - p.userData.age < 3) {
+                        p.material.opacity = (p.userData.lifetime - p.userData.age) / 3;
+                        p.material.transparent = true;
                     }
-                } else {
-                    // Regular particle behavior
-                    const t = p.userData.age / p.userData.lifetime;
-
-                    p.position.x += p.userData.velocity.x * delta;
-                    p.position.y += p.userData.velocity.y * delta;
-                    p.position.z += p.userData.velocity.z * delta;
-
-                    p.userData.velocity.y -= 15 * delta;
-
-                    if (p.position.y < 0.05) {
-                        p.position.y = 0.05;
-                        p.userData.velocity.y *= -0.3;
-                    }
-
-                    p.material.opacity = 1 - t;
-                    const scale = 1 - t * 0.5;
-                    p.scale.set(scale, scale, scale);
                 }
             }
-
-            if (allDead || particles.length === 0) {
-                this.bursts.splice(b, 1);
-            }
+            if (!alive || burst.length === 0) this.bursts.splice(b, 1);
         }
+
+        if (needsUpdate) {
+            this._points.geometry.attributes.position.needsUpdate = true;
+            this._points.geometry.attributes.color.needsUpdate    = true;
+            this._points.geometry.attributes.size.needsUpdate     = true;
+        }
+    }
+
+    destroy() {
+        this.scene.remove(this._points);
+        this._points.geometry.dispose();
+        this._points.material.dispose();
+        this.coins.forEach(c => {
+            this.scene.remove(c);
+            c.geometry.dispose();
+            c.material.dispose();
+        });
+        this.coins = [];
+        this.bursts = [];
     }
 }

@@ -22,8 +22,7 @@ export class Game {
         this.coins = 0;
         this.rampBoostY = 0;        // current Y boost from ramp
         this.celebratingWinner = false;
-        this._pendingMapTheme = 'wasteland';
-        this._pendingMapSeed  = Math.floor(Math.random() * 1000000);
+        this._worldReady = false; // wait for server mapConfig before building world
 
         // ---- Renderer ----
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -45,8 +44,8 @@ export class Game {
             70, window.innerWidth / window.innerHeight, 0.5, 600
         );
 
-        // ---- World (theme applied after mapConfig arrives from server) ----
-        this.world = new World(this.scene, this._pendingMapTheme, this._pendingMapSeed);
+        // ---- World (placeholder — rebuilt with server seed when mapConfig arrives) ----
+        this.world = new World(this.scene, 'wasteland', 0);
 
         // ---- Local player car ----
         const spawnX = 30 + Math.random() * (ARENA_SIZE - 60);
@@ -507,9 +506,10 @@ export class Game {
 
         // ---- Match system events ----
         net.on('mapConfig', (data) => {
-            // Rebuild world with correct theme + seed
+            // Rebuild world with the AUTHORITATIVE server seed — same for all clients
             this.world.destroy();
             this.world = new World(this.scene, data.theme, data.seed);
+            this._worldReady = true;
             this.hud.showThemeLabel(data.theme);
             this.hud.setUITheme(data.theme);
         });
