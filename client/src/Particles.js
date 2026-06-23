@@ -256,6 +256,7 @@ export class ParticleSystem {
             if (!this._active[i]) {
                 // Make sure dead particles are invisible (position them far away)
                 this._sizes[i] = 0;
+                this._positions[i*3+1] = -9999;
                 continue;
             }
 
@@ -265,6 +266,7 @@ export class ParticleSystem {
             if (t >= 1) {
                 this._active[i] = 0;
                 this._sizes[i]  = 0;
+                this._positions[i*3+1] = -9999;
                 needsUpdate = true;
                 continue;
             }
