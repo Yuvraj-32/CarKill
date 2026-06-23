@@ -107,7 +107,7 @@ export class ParticleSystem {
                 (Math.random()-0.5)*speed, Math.random()*speed*0.7+2, (Math.random()-0.5)*speed,
                 r, g, b,
                 0.5 + Math.random()*0.5,
-                0.4 + Math.random()*0.4,
+                0.1 + Math.random()*0.15, // IMMEDIATELY: 0.1-0.25s
                 TYPE_COLLISION
             );
         }
@@ -139,7 +139,7 @@ export class ParticleSystem {
             (Math.random()-0.5)*0.6, 2.5+Math.random()*2.0, (Math.random()-0.5)*0.6, // faster upward
             gray, gray, gray,
             (0.5 + Math.random()*0.4) * scale,
-            0.22 + Math.random()*0.15,  // SHORT: 0.22-0.37s max
+            0.05 + Math.random()*0.05,  // IMMEDIATELY: 0.05-0.1s
             TYPE_EXHAUST
         );
     }
@@ -157,7 +157,7 @@ export class ParticleSystem {
                 (Math.random()-0.5)*speed, Math.random()*speed*0.8+4, (Math.random()-0.5)*speed,
                 r, g, b,
                 0.6 + Math.random()*0.7,
-                0.6 + Math.random()*0.8,
+                0.15 + Math.random()*0.15, // IMMEDIATELY: 0.15-0.3s
                 TYPE_EXPLOSION
             );
         }
@@ -172,7 +172,7 @@ export class ParticleSystem {
                 (Math.random()-0.5)*speed2, 1+Math.random()*3, (Math.random()-0.5)*speed2,
                 gv, gv, gv,
                 0.9 + Math.random()*0.6,
-                1.0 + Math.random()*1.0,
+                0.2 + Math.random()*0.15, // IMMEDIATELY: 0.2-0.35s
                 TYPE_EXHAUST
             );
         }
