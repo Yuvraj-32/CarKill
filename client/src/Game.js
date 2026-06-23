@@ -277,22 +277,17 @@ export class Game {
         const lookPos = new THREE.Vector3();
         this.player.cameraLookTarget.getWorldPosition(lookPos);
 
-        // Speed-based camera pull-back: faster = wider view, feels more intense
-        const speedRatio = Math.abs(this.player.speed) / (this.player.cfg ? this.player.cfg.maxSpeed : 80);
-        const pullBack = speedRatio * 6; // up to +6 units further back at top speed
-        const pullUp   = speedRatio * 1.5; // slight upward shift at speed
-        goalPos.y += pullUp;
+        // Clamp camera goal above ground so it never clips underground
+        goalPos.y = Math.max(goalPos.y, 2.5);
 
-        // Drift: slight sideways camera shift for extra feel
-        if (this.player.isDrifting && Math.abs(this.player._smoothSteer || 0) > 0.1) {
-            const sideShift = this.player._smoothSteer * -3 * speedRatio;
-            goalPos.x += Math.cos(this.player.angle) * sideShift;
-            goalPos.z -= Math.sin(this.player.angle) * sideShift;
+        const lerpFactor = 1 - Math.pow(0.02, delta);
+        this.camera.position.lerp(goalPos, lerpFactor);
+
+        // Also clamp actual camera position
+        if (this.camera.position.y < 1.0) {
+            this.camera.position.y = 1.0;
         }
 
-        // Lerp — slightly slower for smoother camera, faster lerp for tight control
-        const lerpFactor = 1 - Math.pow(0.015, delta);
-        this.camera.position.lerp(goalPos, lerpFactor);
         this.camera.lookAt(lookPos);
 
         // Screen shake
