@@ -4,8 +4,10 @@
 import { Game } from './Game.js';
 import { HUD } from './HUD.js';
 import { MobileControls } from './MobileControls.js';
+import { AudioManager } from './AudioManager.js';
 
 let game = null;
+let audioManager = new AudioManager();
 
 window.addEventListener('DOMContentLoaded', () => {
     const hud = new HUD();
@@ -33,8 +35,11 @@ window.addEventListener('DOMContentLoaded', () => {
         // Hide menu
         hud.hideMenu();
 
+        // Start audio context upon user interaction
+        audioManager.init();
+
         // Create and start the game
         const container = document.getElementById('game-container');
-        game = new Game(container, playerName, vehicleType);
+        game = new Game(container, playerName, vehicleType, audioManager);
     });
 });

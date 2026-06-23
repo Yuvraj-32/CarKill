@@ -10,7 +10,8 @@ import { ParticleSystem } from './Particles.js';
 import { MobileControls } from './MobileControls.js';
 
 export class Game {
-    constructor(container, playerName, vehicleType) {
+    constructor(container, playerName, vehicleType, audioManager) {
+        this.audio = audioManager;
         this.playerName = playerName;
         this.vehicleType = vehicleType;
         this.isDead = false;
@@ -140,6 +141,7 @@ export class Game {
             if (push) {
                 this.player.group.position.x += push.x;
                 this.player.group.position.z += push.z;
+                if (this.audio && Math.abs(this.player.speed) > 10) this.audio.playCrash();
                 this.player.speed *= 0.5;
             }
 
@@ -147,12 +149,14 @@ export class Game {
             const pit = this.world.checkPitCollision(this.player.group.position);
             if (pit) {
                 this.network.sendPitFall();
+                if (this.audio) this.audio.playExplosion();
                 this.player.speed = 0;
             }
 
             // River collision — fall in = death (unless on bridge or flying over)
             if (this.player.group.position.y <= 0.1 && this.world.checkRiverCollision(this.player.group.position)) {
                 this.network.sendRiverFall();
+                if (this.audio) this.audio.playExplosion();
                 this.player.speed = 0;
             }
 
@@ -183,6 +187,7 @@ export class Game {
             // Coin collection
             const collected = this.particles.collectCoins(this.player.getPosition());
             if (collected.length > 0) {
+                if (this.audio) this.audio.playCoin();
                 const total = collected.reduce((a, b) => a + b, 0);
                 this.coins += total;
                 this.hud.updateCoins(this.coins);
@@ -222,6 +227,15 @@ export class Game {
 
         // 4. Update camera
         this._updateCamera(delta);
+
+        // Audio update
+        if (this.audio) {
+            if (this.isDead) {
+                this.audio.updateEngine(0, 80, false);
+            } else {
+                this.audio.updateEngine(this.player.speed, this.player.cfg ? this.player.cfg.maxSpeed : 80, this.player.isDrifting);
+            }
+        }
 
         // 5. Particles
         this.particles.update(delta);
@@ -357,6 +371,7 @@ export class Game {
 
                 // Visual feedback
                 this.shakeAmount = force * 0.1;
+                if (this.audio && force > 10) this.audio.playCrash();
                 const collisionPos = new THREE.Vector3(
                     (myPos.x + rPos.x) / 2,
                     0.5,
@@ -446,6 +461,7 @@ export class Game {
                 this.player.takeDamage(data.damage);
                 this.shakeAmount = 0.8;
                 this.flashAlpha = 0.5;
+                if (this.audio) this.audio.playCrash();
 
                 // Spark effect at player position
                 this.particles.spawnCollision(this.player.getPosition(), 0.5);
@@ -480,6 +496,7 @@ export class Game {
                 const deathPos = victimCar.getPosition().clone();
                 deathPos.y = 0.5;
                 this.particles.spawnExplosion(deathPos);
+                if (this.audio) this.audio.playExplosion();
                 this.particles.spawnCoins(deathPos, 5);
             }
 
