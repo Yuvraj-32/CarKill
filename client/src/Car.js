@@ -451,8 +451,8 @@ export class Car {
         // ---- Smooth steering input (interpolated, not instant snap) ----
         const targetSteer = input.left ? 1 : input.right ? -1 : 0;
         const steerRate = 8; // how fast steering responds (higher = snappier)
-        this._smoothSteer = (this._smoothSteer || 0) +
-            (targetSteer - this._smoothSteer) * Math.min(1, steerRate * dt);
+        const currentSteer = this._smoothSteer || 0;
+        this._smoothSteer = currentSteer + (targetSteer - currentSteer) * Math.min(1, steerRate * dt);
 
         // ---- Acceleration with a punchy feel ----
         // Use a stronger initial kick that tapers as speed builds (like a real engine)
